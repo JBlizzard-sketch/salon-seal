@@ -5,6 +5,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 
+function getRiskBadge(noShowCount: number) {
+  if (noShowCount >= 3) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+        🚨 High Risk
+      </span>
+    );
+  }
+  if (noShowCount >= 1) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+        ⚠️ Watch
+      </span>
+    );
+  }
+  return null;
+}
+
 export default function Clients() {
   const salonId = 1;
   const [searchTerm, setSearchTerm] = useState("");
@@ -16,10 +34,13 @@ export default function Clients() {
     }
   });
 
-  const filteredClients = clients?.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredClients = clients?.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone.includes(searchTerm)
   );
+
+  const highRiskCount = (clients ?? []).filter(c => c.noShowCount >= 3).length;
+  const watchCount = (clients ?? []).filter(c => c.noShowCount >= 1 && c.noShowCount < 3).length;
 
   return (
     <div className="space-y-6">
@@ -29,13 +50,29 @@ export default function Clients() {
           <p className="text-muted-foreground mt-1">Manage your client relationships.</p>
         </div>
         <div className="w-[300px]">
-          <Input 
-            placeholder="Search clients..." 
+          <Input
+            placeholder="Search clients..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
+
+      {!isLoading && (highRiskCount > 0 || watchCount > 0) && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/40 text-sm">
+          <span className="text-muted-foreground">Risk overview:</span>
+          {highRiskCount > 0 && (
+            <span className="flex items-center gap-1.5 font-medium text-red-700 dark:text-red-400">
+              🚨 {highRiskCount} high-risk client{highRiskCount !== 1 ? "s" : ""}
+            </span>
+          )}
+          {watchCount > 0 && (
+            <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+              ⚠️ {watchCount} on watch
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="border rounded-md bg-card">
         {isLoading ? (
@@ -57,13 +94,16 @@ export default function Clients() {
               <div className="text-right">Total Spent</div>
             </div>
             {filteredClients.map(client => (
-              <div 
-                key={client.id} 
+              <div
+                key={client.id}
                 className="grid grid-cols-5 p-4 items-center hover:bg-muted/50 transition-colors cursor-pointer"
                 onClick={() => setSelectedClientId(client.id)}
               >
-                <div className="col-span-2">
-                  <p className="font-medium">{client.name}</p>
+                <div className="col-span-2 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium">{client.name}</p>
+                    {getRiskBadge(client.noShowCount)}
+                  </div>
                   <p className="text-xs text-muted-foreground">{client.phone}</p>
                 </div>
                 <div>{client.totalVisits}</div>
@@ -79,9 +119,9 @@ export default function Clients() {
         )}
       </div>
 
-      <ClientDetailDialog 
-        clientId={selectedClientId} 
-        onClose={() => setSelectedClientId(null)} 
+      <ClientDetailDialog
+        clientId={selectedClientId}
+        onClose={() => setSelectedClientId(null)}
       />
     </div>
   );
@@ -102,7 +142,7 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
         <DialogHeader>
           <DialogTitle>Client Details</DialogTitle>
         </DialogHeader>
-        
+
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-8 w-1/3" />
@@ -114,8 +154,16 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
           <div className="space-y-6">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-bold">{client.name}</h2>
-                <p className="text-muted-foreground">{client.phone}</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-2xl font-bold">{client.name}</h2>
+                  {getRiskBadge(client.noShowCount)}
+                </div>
+                <p className="text-muted-foreground mt-0.5">{client.phone}</p>
+                {client.noShowCount >= 3 && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                    Consider requiring full payment upfront for future bookings.
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Last Visit</p>
@@ -132,9 +180,11 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
                 <p className="text-sm text-muted-foreground">Total Spent</p>
                 <p className="text-2xl font-bold text-emerald-600">Ksh {client.totalSpent.toLocaleString()}</p>
               </div>
-              <div className="bg-muted p-4 rounded-md">
+              <div className={`p-4 rounded-md ${client.noShowCount >= 3 ? "bg-red-50 dark:bg-red-900/20" : client.noShowCount >= 1 ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted"}`}>
                 <p className="text-sm text-muted-foreground">No-Shows</p>
-                <p className={`text-2xl font-bold ${client.noShowCount > 0 ? "text-destructive" : ""}`}>{client.noShowCount}</p>
+                <p className={`text-2xl font-bold ${client.noShowCount >= 3 ? "text-red-600" : client.noShowCount >= 1 ? "text-amber-600" : ""}`}>
+                  {client.noShowCount}
+                </p>
               </div>
             </div>
 
@@ -154,7 +204,8 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           booking.status === 'completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
                           booking.status === 'no_show' ? 'bg-destructive/10 text-destructive dark:bg-destructive/20' :
-                          'bg-muted text-muted-foreground'
+                          booking.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
+                          'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
                         }`}>
                           {booking.status.replace('_', ' ')}
                         </span>

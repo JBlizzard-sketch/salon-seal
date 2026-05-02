@@ -7,6 +7,7 @@ import {
   getListRemindersQueryKey,
   useSendDepositNudge,
   useCreateBooking,
+  useCancelBooking,
   useListServices,
   getListServicesQueryKey,
   useListStaff,
@@ -36,6 +37,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+type BookingRow = NonNullable<ReturnType<typeof useListBookings>["data"]>[number];
+
 export default function Bookings() {
   const salonId = 1;
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -44,6 +47,7 @@ export default function Bookings() {
   const [nudgeSending, setNudgeSending] = useState<Record<number, boolean>>({});
   const [nudgeResult, setNudgeResult] = useState<{ id: number; message: string; waId: string } | null>(null);
   const [showNewBooking, setShowNewBooking] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<BookingRow | null>(null);
   const queryClient = useQueryClient();
 
   const { data: bookings, isLoading } = useListBookings(
@@ -122,6 +126,7 @@ export default function Bookings() {
               <SelectItem value="arrived">Arrived</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="no_show">No Show</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={() => setShowNewBooking(true)}>+ New Booking</Button>
@@ -146,6 +151,8 @@ export default function Bookings() {
               const alreadySent = sentBookingIds.has(booking.id);
               const canNudge =
                 isUpcoming && !booking.depositPaid && booking.status === "pending";
+              const canCancel =
+                booking.status === "pending" || booking.status === "confirmed";
 
               return (
                 <div
@@ -178,7 +185,9 @@ export default function Bookings() {
                             ? "default"
                             : booking.status === "no_show"
                               ? "destructive"
-                              : "secondary"
+                              : booking.status === "cancelled"
+                                ? "outline"
+                                : "secondary"
                         }
                       >
                         {booking.status.replace("_", " ")}
@@ -186,9 +195,9 @@ export default function Bookings() {
                       <span className="text-xs text-muted-foreground">
                         {booking.depositPaid ? (
                           <span className="text-emerald-600">✓ Deposit paid</span>
-                        ) : (
+                        ) : booking.status !== "cancelled" ? (
                           <span className="text-amber-600">⏳ Ksh {booking.depositAmount} pending</span>
-                        )}
+                        ) : null}
                       </span>
                       {alreadySent && (
                         <span className="text-xs text-blue-600 font-medium">📱 Reminder sent</span>
@@ -225,7 +234,7 @@ export default function Bookings() {
                         className="text-xs"
                         onClick={() => handleStatusUpdate(booking.id, "arrived")}
                       >
-                        Arrived
+                        Check In
                       </Button>
                     )}
                     {booking.status === "arrived" && (
@@ -238,7 +247,7 @@ export default function Bookings() {
                         Complete
                       </Button>
                     )}
-                    {(booking.status === "confirmed" || booking.status === "pending") && (
+                    {(booking.status === "confirmed" || booking.status === "arrived") && (
                       <Button
                         size="sm"
                         variant="destructive"
@@ -246,6 +255,16 @@ export default function Bookings() {
                         onClick={() => handleStatusUpdate(booking.id, "no_show")}
                       >
                         No Show
+                      </Button>
+                    )}
+                    {canCancel && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                        onClick={() => setCancelTarget(booking)}
+                      >
+                        Cancel
                       </Button>
                     )}
                   </div>
@@ -266,6 +285,18 @@ export default function Bookings() {
           setShowNewBooking(false);
         }}
       />
+
+      {/* Cancel Booking Dialog */}
+      {cancelTarget && (
+        <CancelBookingDialog
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={() => {
+            setCancelTarget(null);
+            queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+          }}
+        />
+      )}
 
       {/* Deposit Nudge Preview */}
       <Dialog open={!!nudgeResult} onOpenChange={(o) => !o && setNudgeResult(null)}>
@@ -288,6 +319,107 @@ export default function Bookings() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function CancelBookingDialog({
+  booking,
+  onClose,
+  onCancelled,
+}: {
+  booking: BookingRow;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<{ refundEligible: boolean; message: string } | null>(null);
+  const cancelBooking = useCancelBooking();
+
+  const handleConfirm = () => {
+    cancelBooking.mutate(
+      { id: booking.id, data: { reason: reason || null } },
+      {
+        onSuccess: (data) => {
+          setResult({ refundEligible: data.refundEligible, message: data.message });
+          onCancelled();
+        },
+        onError: () => {
+          setResult({ refundEligible: false, message: "Failed to cancel booking. Please try again." });
+        },
+      },
+    );
+  };
+
+  const apptDate = new Date(booking.appointmentAt);
+  const hoursUntil = (apptDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  const likelyRefund = hoursUntil >= 24;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        {result ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {result.refundEligible ? "✅ Booking Cancelled — Refund Issued" : "Booking Cancelled"}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">{result.message}</p>
+            <DialogFooter>
+              <Button onClick={onClose}>Done</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Cancel Booking</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-1 text-sm">
+                <p className="font-semibold">{booking.clientName}</p>
+                <p className="text-muted-foreground">
+                  {booking.serviceName} · {format(apptDate, "EEE, MMM d")} at {format(apptDate, "h:mm a")}
+                </p>
+                {booking.depositPaid && (
+                  <p className="text-muted-foreground">
+                    Deposit paid: <span className="font-medium text-foreground">Ksh {booking.depositAmount.toLocaleString()}</span>
+                  </p>
+                )}
+              </div>
+
+              {booking.depositPaid && (
+                <div className={`rounded-lg p-3 text-sm border ${likelyRefund ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300" : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300"}`}>
+                  {likelyRefund
+                    ? `✅ More than 24 hours away — deposit of Ksh ${booking.depositAmount.toLocaleString()} will be refunded via M-Pesa.`
+                    : `⚠️ Less than 24 hours away — deposit of Ksh ${booking.depositAmount.toLocaleString()} will be forfeited per cancellation policy.`}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cancel-reason">Reason (optional)</Label>
+                <Textarea
+                  id="cancel-reason"
+                  rows={2}
+                  placeholder="e.g. Client requested cancellation"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>Keep Booking</Button>
+              <Button
+                variant="destructive"
+                disabled={cancelBooking.isPending}
+                onClick={handleConfirm}
+              >
+                {cancelBooking.isPending ? "Cancelling…" : "Confirm Cancel"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

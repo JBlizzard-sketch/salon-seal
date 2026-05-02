@@ -9,11 +9,13 @@ import {
   useListBookings,
   getListBookingsQueryKey,
   useSendBookingReminder,
+  useUpdateBookingStatus,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
+import { format, isToday } from "date-fns";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -43,12 +45,17 @@ export default function Dashboard() {
 
   const processReminders = useProcessReminders();
   const sendReminder = useSendBookingReminder();
+  const updateStatus = useUpdateBookingStatus();
 
   const now = new Date();
   const sentBookingIds = new Set([
     ...(reminders?.map((r) => r.bookingId) ?? []),
     ...Array.from(reminderJustSent),
   ]);
+
+  const todaySchedule = (allBookings ?? [])
+    .filter((b) => isToday(new Date(b.appointmentAt)))
+    .sort((a, b) => new Date(a.appointmentAt).getTime() - new Date(b.appointmentAt).getTime());
 
   const reminderQueue = (allBookings ?? []).filter((b) => {
     if (b.status !== "confirmed" && b.status !== "pending") return false;
@@ -91,6 +98,18 @@ export default function Dashboard() {
     );
   };
 
+  const handleQuickStatus = (id: number, status: "arrived" | "completed" | "no_show") => {
+    updateStatus.mutate(
+      { id, data: { status } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey(salonId) });
+        },
+      },
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -117,10 +136,13 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Today's Overview</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          {format(now, "EEEE, MMMM d")}
+        </h1>
         <p className="text-muted-foreground mt-1">Here is what's happening at your salon today.</p>
       </div>
 
+      {/* KPI row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -128,6 +150,13 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{summary.todayBookings}</div>
+            {todaySchedule.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {todaySchedule.filter(b => b.status === "completed").length} completed
+                {" · "}
+                {todaySchedule.filter(b => b.status === "pending" || b.status === "confirmed" || b.status === "arrived").length} remaining
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -144,6 +173,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-amber-600">Ksh {summary.depositsHeld.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">across pending bookings</p>
           </CardContent>
         </Card>
         <Card>
@@ -152,37 +182,92 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-destructive">{summary.noShowRate}%</div>
+            <p className="text-xs text-muted-foreground mt-1">all-time average</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Appointments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summary.upcomingBookings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No upcoming bookings today.</p>
-            ) : (
-              <div className="space-y-4">
-                {summary.upcomingBookings.map((booking) => (
-                  <div key={booking.id} className="flex justify-between items-center p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{booking.clientName}</p>
-                      <p className="text-sm text-muted-foreground">{booking.serviceName} • {booking.staffName}</p>
+      {/* Today's Schedule */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Today's Schedule</CardTitle>
+            <span className="text-sm text-muted-foreground">
+              {todaySchedule.length === 0 ? "No bookings today" : `${todaySchedule.length} appointment${todaySchedule.length !== 1 ? "s" : ""}`}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {todaySchedule.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No appointments scheduled for today.</p>
+          ) : (
+            <div className="divide-y">
+              {todaySchedule.map((booking) => {
+                const appt = new Date(booking.appointmentAt);
+                const isPast = appt < now;
+
+                return (
+                  <div key={booking.id} className={`py-3 flex items-center gap-4 ${isPast && booking.status === "pending" ? "opacity-70" : ""}`}>
+                    <div className="w-14 shrink-0 text-right">
+                      <p className="text-sm font-semibold">{format(appt, "h:mm")}</p>
+                      <p className="text-xs text-muted-foreground">{format(appt, "a")}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{format(new Date(booking.appointmentAt), "h:mm a")}</p>
-                      <p className="text-xs text-muted-foreground">{booking.status}</p>
+                    <div className="w-0.5 self-stretch bg-border rounded-full shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm">{booking.clientName}</p>
+                        <Badge
+                          variant={
+                            booking.status === "completed" ? "default" :
+                            booking.status === "no_show" ? "destructive" :
+                            booking.status === "arrived" ? "secondary" :
+                            booking.status === "cancelled" ? "outline" :
+                            "secondary"
+                          }
+                          className="text-[10px] py-0"
+                        >
+                          {booking.status.replace("_", " ")}
+                        </Badge>
+                        {!booking.depositPaid && booking.status !== "cancelled" && (
+                          <span className="text-[10px] text-amber-600 font-medium">⏳ deposit pending</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {booking.serviceName}{booking.staffName ? ` · ${booking.staffName}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      {booking.status === "pending" && (
+                        <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => handleQuickStatus(booking.id, "arrived")}>
+                          Check In
+                        </Button>
+                      )}
+                      {booking.status === "confirmed" && (
+                        <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => handleQuickStatus(booking.id, "arrived")}>
+                          Check In
+                        </Button>
+                      )}
+                      {booking.status === "arrived" && (
+                        <Button size="sm" variant="default" className="text-xs h-7 px-2" onClick={() => handleQuickStatus(booking.id, "completed")}>
+                          Complete
+                        </Button>
+                      )}
+                      {(booking.status === "pending" || booking.status === "confirmed" || booking.status === "arrived") && (
+                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2 text-destructive hover:text-destructive" onClick={() => handleQuickStatus(booking.id, "no_show")}>
+                          No Show
+                        </Button>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Activity */}
         <Card>
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
@@ -201,12 +286,12 @@ export default function Dashboard() {
                         {item.type === "booking_completed" && "Booking Completed"}
                         {item.type === "booking_cancelled" && "Booking Cancelled"}
                         {item.type === "no_show" && <span className="text-destructive">No-Show</span>}
-                        {item.type === "deposit_received" && <span className="text-emerald-600">Deposit Received</span>}
-                        {item.type === "refund_issued" && "Refund Issued"}
+                        {item.type === "deposit_received" && <span className="text-emerald-600">✅ Deposit Received</span>}
+                        {item.type === "refund_issued" && <span className="text-blue-600">↩ Refund Issued</span>}
                         {item.type === "reminder_sent" && <span className="text-blue-600">📱 Reminder Sent</span>}
                         {item.type === "deposit_nudge_sent" && <span className="text-amber-600">💳 Deposit Request Sent</span>}
                       </p>
-                      <p className="text-xs text-muted-foreground">{item.clientName} • {item.serviceName}</p>
+                      <p className="text-xs text-muted-foreground">{item.clientName} · {item.serviceName}</p>
                     </div>
                     <div className="text-right">
                       {item.amount && <p className="text-sm font-semibold">Ksh {item.amount}</p>}
@@ -218,91 +303,85 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* WhatsApp Reminder Queue */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                📱 WhatsApp Reminder Queue
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {reminderQueue.length > 0
-                  ? `${reminderQueue.length} booking${reminderQueue.length === 1 ? "" : "s"} due for a reminder in the next 25 hours`
-                  : "No reminders due right now"}
-                {todayReminders > 0 && ` · ${todayReminders} sent today`}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {processResult && (
-                <span className="text-sm text-emerald-600 font-medium">
-                  ✓ {processResult.sent} reminder{processResult.sent !== 1 ? "s" : ""} sent
-                </span>
-              )}
-              <Button
-                variant="default"
-                size="sm"
-                disabled={processingAll || reminderQueue.length === 0}
-                onClick={handleProcessAll}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                {processingAll ? (
-                  <>
-                    <span className="animate-spin mr-1.5">⏳</span> Processing…
-                  </>
-                ) : (
-                  <>⚡ Process All ({reminderQueue.length})</>
+        {/* WhatsApp Reminder Queue */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  📱 Reminder Queue
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {reminderQueue.length > 0
+                    ? `${reminderQueue.length} booking${reminderQueue.length === 1 ? "" : "s"} due in the next 25 hrs`
+                    : "No reminders due right now"}
+                  {todayReminders > 0 && ` · ${todayReminders} sent today`}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {processResult && (
+                  <span className="text-sm text-emerald-600 font-medium">
+                    ✓ {processResult.sent} sent
+                  </span>
                 )}
-              </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={processingAll || reminderQueue.length === 0}
+                  onClick={handleProcessAll}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {processingAll ? "Processing…" : `⚡ Send All (${reminderQueue.length})`}
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {reminderQueue.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground text-sm">
-              {sentBookingIds.size > 0
-                ? "All upcoming bookings have reminders sent. ✅"
-                : "No confirmed bookings due for reminders in the next 25 hours."}
-            </div>
-          ) : (
-            <div className="divide-y">
-              {reminderQueue.map((booking) => {
-                const appt = new Date(booking.appointmentAt);
-                const hoursUntil = (appt.getTime() - now.getTime()) / (1000 * 60 * 60);
-                const isSending = reminderSending[booking.id];
+          </CardHeader>
+          <CardContent>
+            {reminderQueue.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                {sentBookingIds.size > 0
+                  ? "All upcoming bookings have reminders. ✅"
+                  : "No confirmed bookings due for reminders in the next 25 hours."}
+              </div>
+            ) : (
+              <div className="divide-y">
+                {reminderQueue.map((booking) => {
+                  const appt = new Date(booking.appointmentAt);
+                  const hoursUntil = (appt.getTime() - now.getTime()) / (1000 * 60 * 60);
+                  const isSending = reminderSending[booking.id];
 
-                return (
-                  <div key={booking.id} className="py-3 flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{booking.clientName}</p>
-                        <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
-                          in {Math.round(hoursUntil)}h
-                        </span>
+                  return (
+                    <div key={booking.id} className="py-3 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{booking.clientName}</p>
+                          <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                            in {Math.round(hoursUntil)}h
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {booking.serviceName} · {format(appt, "EEE, MMM d")} at {format(appt, "h:mm a")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{booking.clientPhone}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {booking.serviceName} • {format(appt, "EEE, MMM d")} at {format(appt, "h:mm a")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{booking.clientPhone}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-green-500 text-green-700 hover:bg-green-50"
+                        disabled={isSending}
+                        onClick={() => handleSendOne(booking.id)}
+                      >
+                        {isSending ? "Sending…" : "📱 Send"}
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 border-green-500 text-green-700 hover:bg-green-50"
-                      disabled={isSending}
-                      onClick={() => handleSendOne(booking.id)}
-                    >
-                      {isSending ? "Sending…" : "📱 Send"}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
