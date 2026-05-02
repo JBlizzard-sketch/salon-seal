@@ -1,0 +1,1150 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: SalonSeal API - No-show deposit system for Nairobi salons
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: salons
+    description: Salon management
+  - name: services
+    description: Service catalog
+  - name: staff
+    description: Staff management
+  - name: bookings
+    description: Booking management
+  - name: clients
+    description: Client management
+  - name: dashboard
+    description: Dashboard analytics
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Salons ──────────────────────────────────────────────────────────────────
+  /salons:
+    get:
+      operationId: listSalons
+      tags: [salons]
+      summary: List all salons
+      responses:
+        "200":
+          description: List of salons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Salon"
+    post:
+      operationId: createSalon
+      tags: [salons]
+      summary: Create a salon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSalonBody"
+      responses:
+        "201":
+          description: Created salon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Salon"
+
+  /salons/{id}:
+    get:
+      operationId: getSalon
+      tags: [salons]
+      summary: Get salon by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Salon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Salon"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSalon
+      tags: [salons]
+      summary: Update salon
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSalonBody"
+      responses:
+        "200":
+          description: Updated salon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Salon"
+
+  /salons/by-slug/{slug}:
+    get:
+      operationId: getSalonBySlug
+      tags: [salons]
+      summary: Get salon by booking slug (public booking page)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Salon with services and staff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalonPublic"
+        "404":
+          description: Not found
+
+  # ── Services ─────────────────────────────────────────────────────────────────
+  /salons/{salonId}/services:
+    get:
+      operationId: listServices
+      tags: [services]
+      summary: List services for a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+    post:
+      operationId: createService
+      tags: [services]
+      summary: Add a service to a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceBody"
+      responses:
+        "201":
+          description: Created service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+
+  /salons/{salonId}/services/{id}:
+    patch:
+      operationId: updateService
+      tags: [services]
+      summary: Update a service
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServiceBody"
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+    delete:
+      operationId: deleteService
+      tags: [services]
+      summary: Delete a service
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Staff ─────────────────────────────────────────────────────────────────────
+  /salons/{salonId}/staff:
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List staff for a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of staff
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffMember"
+    post:
+      operationId: createStaffMember
+      tags: [staff]
+      summary: Add a staff member
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffMemberBody"
+      responses:
+        "201":
+          description: Created staff member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+
+  /salons/{salonId}/staff/{id}:
+    patch:
+      operationId: updateStaffMember
+      tags: [staff]
+      summary: Update staff member
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffMemberBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+    delete:
+      operationId: deleteStaffMember
+      tags: [staff]
+      summary: Delete staff member
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Bookings ──────────────────────────────────────────────────────────────────
+  /bookings:
+    get:
+      operationId: listBookings
+      tags: [bookings]
+      summary: List bookings (filterable by salonId and status)
+      parameters:
+        - name: salonId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a booking (client-facing)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingBody"
+      responses:
+        "201":
+          description: Created booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/{id}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      summary: Get booking by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+
+  /bookings/{id}/status:
+    patch:
+      operationId: updateBookingStatus
+      tags: [bookings]
+      summary: Update booking status (arrived, no-show, completed, cancelled)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookingStatusBody"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/{id}/simulate-payment:
+    post:
+      operationId: simulateMpesaPayment
+      tags: [bookings]
+      summary: Simulate an M-Pesa deposit payment (dev/demo use)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment simulation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulatePaymentResponse"
+        "400":
+          description: Already paid or invalid state
+        "404":
+          description: Not found
+
+  /bookings/{id}/cancel:
+    post:
+      operationId: cancelBooking
+      tags: [bookings]
+      summary: Cancel a booking (checks cancellation window, triggers refund if eligible)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelBookingBody"
+      responses:
+        "200":
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancellationResult"
+
+  # ── Clients ───────────────────────────────────────────────────────────────────
+  /salons/{salonId}/clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List clients for a salon (CRM view)
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+
+  /salons/{salonId}/clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get client with full history
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client with visit history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDetail"
+        "404":
+          description: Not found
+
+  # ── Dashboard ─────────────────────────────────────────────────────────────────
+  /salons/{salonId}/dashboard:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Dashboard summary — today's bookings, revenue, no-show rate, deposits held
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /salons/{salonId}/analytics:
+    get:
+      operationId: getSalonAnalytics
+      tags: [dashboard]
+      summary: Analytics — peak days, popular services, staff performance, weekly trend
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalonAnalytics"
+
+  /salons/{salonId}/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Recent bookings activity feed
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Salon:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+        phone:
+          type: string
+        location:
+          type: string
+        cancellationWindowHours:
+          type: integer
+        platformFeePercent:
+          type: number
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - phone
+        - location
+        - cancellationWindowHours
+        - platformFeePercent
+        - isActive
+        - createdAt
+
+    SalonPublic:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+        phone:
+          type: string
+        location:
+          type: string
+        cancellationWindowHours:
+          type: integer
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/Service"
+        staff:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffMember"
+      required:
+        - id
+        - name
+        - slug
+        - phone
+        - location
+        - cancellationWindowHours
+        - services
+        - staff
+
+    CreateSalonBody:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+        phone:
+          type: string
+        location:
+          type: string
+        cancellationWindowHours:
+          type: integer
+      required:
+        - name
+        - slug
+        - phone
+        - location
+        - cancellationWindowHours
+
+    UpdateSalonBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        cancellationWindowHours:
+          type: ["integer", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: integer
+        depositAmount:
+          type: integer
+        durationMinutes:
+          type: integer
+        isActive:
+          type: boolean
+      required:
+        - id
+        - salonId
+        - name
+        - price
+        - depositAmount
+        - durationMinutes
+        - isActive
+
+    CreateServiceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: integer
+        depositAmount:
+          type: integer
+        durationMinutes:
+          type: integer
+      required:
+        - name
+        - price
+        - depositAmount
+        - durationMinutes
+
+    UpdateServiceBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        price:
+          type: ["integer", "null"]
+        depositAmount:
+          type: ["integer", "null"]
+        durationMinutes:
+          type: ["integer", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+        phone:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+      required:
+        - id
+        - salonId
+        - name
+        - role
+        - isActive
+
+    CreateStaffMemberBody:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        phone:
+          type: ["string", "null"]
+      required:
+        - name
+        - role
+
+    UpdateStaffMemberBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        role:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        serviceId:
+          type: integer
+        staffId:
+          type: ["integer", "null"]
+        clientId:
+          type: integer
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        appointmentAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, confirmed, arrived, completed, cancelled, no_show]
+        depositAmount:
+          type: integer
+        depositPaid:
+          type: boolean
+        mpesaRef:
+          type: ["string", "null"]
+        refundEligible:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        serviceName:
+          type: string
+        staffName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - salonId
+        - serviceId
+        - clientId
+        - clientName
+        - clientPhone
+        - appointmentAt
+        - status
+        - depositAmount
+        - depositPaid
+        - refundEligible
+        - serviceName
+        - createdAt
+
+    CreateBookingBody:
+      type: object
+      properties:
+        salonId:
+          type: integer
+        serviceId:
+          type: integer
+        staffId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        appointmentAt:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+      required:
+        - salonId
+        - serviceId
+        - clientName
+        - clientPhone
+        - appointmentAt
+
+    UpdateBookingStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [arrived, completed, no_show, cancelled]
+      required:
+        - status
+
+    CancelBookingBody:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]
+      required: []
+
+    CancellationResult:
+      type: object
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+        refundEligible:
+          type: boolean
+        refundAmount:
+          type: integer
+        message:
+          type: string
+      required:
+        - booking
+        - refundEligible
+        - refundAmount
+        - message
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        totalVisits:
+          type: integer
+        noShowCount:
+          type: integer
+        totalSpent:
+          type: integer
+        lastVisitAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - salonId
+        - name
+        - phone
+        - totalVisits
+        - noShowCount
+        - totalSpent
+        - createdAt
+
+    ClientDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        totalVisits:
+          type: integer
+        noShowCount:
+          type: integer
+        totalSpent:
+          type: integer
+        lastVisitAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        recentBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Booking"
+      required:
+        - id
+        - salonId
+        - name
+        - phone
+        - totalVisits
+        - noShowCount
+        - totalSpent
+        - createdAt
+        - recentBookings
+
+    DashboardSummary:
+      type: object
+      properties:
+        todayBookings:
+          type: integer
+        todayRevenue:
+          type: integer
+        depositsHeld:
+          type: integer
+        noShowRate:
+          type: number
+        pendingBookings:
+          type: integer
+        completedToday:
+          type: integer
+        noShowsToday:
+          type: integer
+        upcomingBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Booking"
+      required:
+        - todayBookings
+        - todayRevenue
+        - depositsHeld
+        - noShowRate
+        - pendingBookings
+        - completedToday
+        - noShowsToday
+        - upcomingBookings
+
+    SalonAnalytics:
+      type: object
+      properties:
+        peakDays:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayCount"
+        popularServices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceCount"
+        weeklyTrend:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklyTrendPoint"
+        staffPerformance:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffPerformance"
+      required:
+        - peakDays
+        - popularServices
+        - weeklyTrend
+        - staffPerformance
+
+    DayCount:
+      type: object
+      properties:
+        day:
+          type: string
+        count:
+          type: integer
+      required:
+        - day
+        - count
+
+    ServiceCount:
+      type: object
+      properties:
+        serviceId:
+          type: integer
+        serviceName:
+          type: string
+        count:
+          type: integer
+        revenue:
+          type: integer
+      required:
+        - serviceId
+        - serviceName
+        - count
+        - revenue
+
+    WeeklyTrendPoint:
+      type: object
+      properties:
+        week:
+          type: string
+        bookings:
+          type: integer
+        revenue:
+          type: integer
+        noShows:
+          type: integer
+      required:
+        - week
+        - bookings
+        - revenue
+        - noShows
+
+    StaffPerformance:
+      type: object
+      properties:
+        staffId:
+          type: integer
+        staffName:
+          type: string
+        bookings:
+          type: integer
+        completed:
+          type: integer
+        noShows:
+          type: integer
+      required:
+        - staffId
+        - staffName
+        - bookings
+        - completed
+        - noShows
+
+    SimulatePaymentResponse:
+      type: object
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+        mpesaRef:
+          type: string
+        message:
+          type: string
+      required:
+        - booking
+        - mpesaRef
+        - message
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [booking_created, booking_confirmed, booking_completed, booking_cancelled, no_show, deposit_received, refund_issued]
+        bookingId:
+          type: integer
+        clientName:
+          type: string
+        serviceName:
+          type: string
+        amount:
+          type: ["integer", "null"]
+        occurredAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - bookingId
+        - clientName
+        - serviceName
+        - occurredAt
