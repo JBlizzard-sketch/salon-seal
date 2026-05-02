@@ -481,7 +481,7 @@ export const ListClientsResponseItem = zod.object({
   totalVisits: zod.number(),
   noShowCount: zod.number(),
   totalSpent: zod.number(),
-  lastVisitAt: zod.string().nullish(),
+  lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListClientsResponse = zod.array(ListClientsResponseItem);
@@ -502,7 +502,7 @@ export const GetClientResponse = zod.object({
   totalVisits: zod.number(),
   noShowCount: zod.number(),
   totalSpent: zod.number(),
-  lastVisitAt: zod.string().nullish(),
+  lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   recentBookings: zod.array(
     zod.object({
