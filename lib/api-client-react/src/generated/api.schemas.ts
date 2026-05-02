@@ -206,6 +206,7 @@ export interface Client {
   totalVisits: number;
   noShowCount: number;
   totalSpent: number;
+  isBlacklisted: boolean;
   /** @nullable */
   lastVisitAt?: string | null;
   createdAt: string;
@@ -219,10 +220,15 @@ export interface ClientDetail {
   totalVisits: number;
   noShowCount: number;
   totalSpent: number;
+  isBlacklisted: boolean;
   /** @nullable */
   lastVisitAt?: string | null;
   createdAt: string;
   recentBookings: Booking[];
+}
+
+export interface SetBlacklistBody {
+  isBlacklisted: boolean;
 }
 
 export interface DashboardSummary {

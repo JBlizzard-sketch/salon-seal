@@ -47,11 +47,15 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
   const { salonId, serviceId, staffId, clientName, clientPhone, appointmentAt, notes } = parsed.data;
 
-  // Upsert client
+  // Upsert client — but reject if blacklisted
   let [client] = await db
     .select()
     .from(clientsTable)
     .where(and(eq(clientsTable.salonId, salonId), eq(clientsTable.phone, clientPhone)));
+  if (client?.isBlacklisted) {
+    res.status(403).json({ error: "BLACKLISTED", message: "We're unable to accept new bookings from this number. Please contact the salon directly." });
+    return;
+  }
   if (!client) {
     [client] = await db.insert(clientsTable).values({ salonId, name: clientName, phone: clientPhone }).returning();
   }

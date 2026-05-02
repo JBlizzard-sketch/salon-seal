@@ -42,6 +42,7 @@ type BookingRow = NonNullable<ReturnType<typeof useListBookings>["data"]>[number
 export default function Bookings() {
   const salonId = 1;
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [exporting, setExporting] = useState(false);
   const [reminderSending, setReminderSending] = useState<Record<number, boolean>>({});
   const [reminderSent, setReminderSent] = useState<Record<number, boolean>>({});
   const [nudgeSending, setNudgeSending] = useState<Record<number, boolean>>({});
@@ -107,6 +108,37 @@ export default function Bookings() {
 
   const now = new Date();
 
+  const handleExportCsv = () => {
+    if (!bookings || bookings.length === 0) return;
+    setExporting(true);
+    try {
+      const header = ["ID", "Client", "Phone", "Service", "Staff", "Date", "Time", "Status", "Deposit Paid", "Deposit Amount (Ksh)", "Notes"];
+      const rows = bookings.map(b => [
+        b.id,
+        b.clientName,
+        b.clientPhone,
+        b.serviceName,
+        b.staffName || "",
+        format(new Date(b.appointmentAt), "yyyy-MM-dd"),
+        format(new Date(b.appointmentAt), "HH:mm"),
+        b.status,
+        b.depositPaid ? "Yes" : "No",
+        b.depositAmount,
+        (b.notes || "").replace(/,/g, ";"),
+      ]);
+      const csv = [header, ...rows].map(r => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bookings-${format(new Date(), "yyyy-MM-dd")}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
@@ -129,6 +161,13 @@ export default function Bookings() {
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            onClick={handleExportCsv}
+            disabled={exporting || !bookings || bookings.length === 0}
+          >
+            ↓ Export CSV
+          </Button>
           <Button onClick={() => setShowNewBooking(true)}>+ New Booking</Button>
         </div>
       </div>

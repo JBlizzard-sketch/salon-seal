@@ -40,6 +40,7 @@ import type {
   SendReminderBody,
   SendReminderResponse,
   Service,
+  SetBlacklistBody,
   SimulatePaymentResponse,
   StaffMember,
   UpdateBookingStatusBody,
@@ -2286,6 +2287,94 @@ export function useGetClient<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Block or unblock a client from making new bookings
+ */
+export const getSetClientBlacklistUrl = (salonId: number, id: number) => {
+  return `/api/salons/${salonId}/clients/${id}/blacklist`;
+};
+
+export const setClientBlacklist = async (
+  salonId: number,
+  id: number,
+  setBlacklistBody: SetBlacklistBody,
+  options?: RequestInit,
+): Promise<ClientDetail> => {
+  return customFetch<ClientDetail>(getSetClientBlacklistUrl(salonId, id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setBlacklistBody),
+  });
+};
+
+export const getSetClientBlacklistMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setClientBlacklist>>,
+    TError,
+    { salonId: number; id: number; data: BodyType<SetBlacklistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setClientBlacklist>>,
+  TError,
+  { salonId: number; id: number; data: BodyType<SetBlacklistBody> },
+  TContext
+> => {
+  const mutationKey = ["setClientBlacklist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setClientBlacklist>>,
+    { salonId: number; id: number; data: BodyType<SetBlacklistBody> }
+  > = (props) => {
+    const { salonId, id, data } = props ?? {};
+
+    return setClientBlacklist(salonId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetClientBlacklistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setClientBlacklist>>
+>;
+export type SetClientBlacklistMutationBody = BodyType<SetBlacklistBody>;
+export type SetClientBlacklistMutationError = ErrorType<void>;
+
+/**
+ * @summary Block or unblock a client from making new bookings
+ */
+export const useSetClientBlacklist = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setClientBlacklist>>,
+    TError,
+    { salonId: number; id: number; data: BodyType<SetBlacklistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setClientBlacklist>>,
+  TError,
+  { salonId: number; id: number; data: BodyType<SetBlacklistBody> },
+  TContext
+> => {
+  return useMutation(getSetClientBlacklistMutationOptions(options));
+};
 
 /**
  * @summary Dashboard summary — today's bookings, revenue, no-show rate, deposits held

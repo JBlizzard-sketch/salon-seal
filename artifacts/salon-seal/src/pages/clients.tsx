@@ -1,11 +1,26 @@
 import { useState } from "react";
-import { useListClients, getListClientsQueryKey, useGetClient, getGetClientQueryKey } from "@workspace/api-client-react";
+import {
+  useListClients,
+  getListClientsQueryKey,
+  useGetClient,
+  getGetClientQueryKey,
+  useSetClientBlacklist,
+} from "@workspace/api-client-react";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 
-function getRiskBadge(noShowCount: number) {
+function getRiskBadge(noShowCount: number, isBlacklisted: boolean) {
+  if (isBlacklisted) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+        🚫 Blocked
+      </span>
+    );
+  }
   if (noShowCount >= 3) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
@@ -29,9 +44,7 @@ export default function Clients() {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
 
   const { data: clients, isLoading } = useListClients(salonId, {
-    query: {
-      queryKey: getListClientsQueryKey(salonId)
-    }
+    query: { queryKey: getListClientsQueryKey(salonId) },
   });
 
   const filteredClients = clients?.filter(c =>
@@ -39,8 +52,9 @@ export default function Clients() {
     c.phone.includes(searchTerm)
   );
 
-  const highRiskCount = (clients ?? []).filter(c => c.noShowCount >= 3).length;
-  const watchCount = (clients ?? []).filter(c => c.noShowCount >= 1 && c.noShowCount < 3).length;
+  const blacklistedCount = (clients ?? []).filter(c => c.isBlacklisted).length;
+  const highRiskCount = (clients ?? []).filter(c => !c.isBlacklisted && c.noShowCount >= 3).length;
+  const watchCount = (clients ?? []).filter(c => !c.isBlacklisted && c.noShowCount >= 1 && c.noShowCount < 3).length;
 
   return (
     <div className="space-y-6">
@@ -58,12 +72,17 @@ export default function Clients() {
         </div>
       </div>
 
-      {!isLoading && (highRiskCount > 0 || watchCount > 0) && (
-        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/40 text-sm">
-          <span className="text-muted-foreground">Risk overview:</span>
+      {!isLoading && (blacklistedCount > 0 || highRiskCount > 0 || watchCount > 0) && (
+        <div className="flex items-center gap-4 p-3 rounded-lg border bg-muted/40 text-sm flex-wrap">
+          <span className="text-muted-foreground">Client overview:</span>
+          {blacklistedCount > 0 && (
+            <span className="flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-400">
+              🚫 {blacklistedCount} blocked
+            </span>
+          )}
           {highRiskCount > 0 && (
             <span className="flex items-center gap-1.5 font-medium text-red-700 dark:text-red-400">
-              🚨 {highRiskCount} high-risk client{highRiskCount !== 1 ? "s" : ""}
+              🚨 {highRiskCount} high-risk
             </span>
           )}
           {watchCount > 0 && (
@@ -82,9 +101,7 @@ export default function Clients() {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : !filteredClients || filteredClients.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground">
-            No clients found.
-          </div>
+          <div className="p-12 text-center text-muted-foreground">No clients found.</div>
         ) : (
           <div className="divide-y">
             <div className="grid grid-cols-5 p-4 font-medium text-sm text-muted-foreground bg-muted/30">
@@ -96,13 +113,13 @@ export default function Clients() {
             {filteredClients.map(client => (
               <div
                 key={client.id}
-                className="grid grid-cols-5 p-4 items-center hover:bg-muted/50 transition-colors cursor-pointer"
+                className={`grid grid-cols-5 p-4 items-center hover:bg-muted/50 transition-colors cursor-pointer ${client.isBlacklisted ? "opacity-60" : ""}`}
                 onClick={() => setSelectedClientId(client.id)}
               >
                 <div className="col-span-2 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium">{client.name}</p>
-                    {getRiskBadge(client.noShowCount)}
+                    {getRiskBadge(client.noShowCount, client.isBlacklisted)}
                   </div>
                   <p className="text-xs text-muted-foreground">{client.phone}</p>
                 </div>
@@ -129,18 +146,40 @@ export default function Clients() {
 
 function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, onClose: () => void }) {
   const salonId = 1;
+  const queryClient = useQueryClient();
+  const [toggling, setToggling] = useState(false);
+
   const { data: client, isLoading } = useGetClient(salonId, clientId || 0, {
     query: {
       enabled: !!clientId,
-      queryKey: getGetClientQueryKey(salonId, clientId || 0)
-    }
+      queryKey: getGetClientQueryKey(salonId, clientId || 0),
+    },
   });
+
+  const setBlacklist = useSetClientBlacklist();
+
+  const handleToggleBlacklist = () => {
+    if (!client) return;
+    const next = !client.isBlacklisted;
+    setToggling(true);
+    setBlacklist.mutate(
+      { salonId, id: client.id, data: { isBlacklisted: next } },
+      {
+        onSuccess: () => {
+          setToggling(false);
+          queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(salonId, client.id) });
+          queryClient.invalidateQueries({ queryKey: getListClientsQueryKey(salonId) });
+        },
+        onError: () => setToggling(false),
+      },
+    );
+  };
 
   return (
     <Dialog open={!!clientId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Client Details</DialogTitle>
+          <DialogTitle>Client Profile</DialogTitle>
         </DialogHeader>
 
         {isLoading ? (
@@ -156,12 +195,17 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
               <div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-2xl font-bold">{client.name}</h2>
-                  {getRiskBadge(client.noShowCount)}
+                  {getRiskBadge(client.noShowCount, client.isBlacklisted)}
                 </div>
                 <p className="text-muted-foreground mt-0.5">{client.phone}</p>
-                {client.noShowCount >= 3 && (
+                {client.isBlacklisted && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    This client is blocked from making new online bookings.
+                  </p>
+                )}
+                {!client.isBlacklisted && client.noShowCount >= 3 && (
                   <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
-                    Consider requiring full payment upfront for future bookings.
+                    Consider blocking this client or requiring full payment upfront.
                   </p>
                 )}
               </div>
@@ -193,29 +237,46 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
               {client.recentBookings.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No bookings found.</p>
               ) : (
-                <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
+                <div className="border rounded-md divide-y max-h-56 overflow-y-auto">
                   {client.recentBookings.map(booking => (
                     <div key={booking.id} className="p-3 text-sm flex justify-between items-center">
                       <div>
                         <p className="font-medium">{booking.serviceName}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(booking.appointmentAt), "MMM d, yyyy h:mm a")}</p>
                       </div>
-                      <div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          booking.status === 'completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                          booking.status === 'no_show' ? 'bg-destructive/10 text-destructive dark:bg-destructive/20' :
-                          booking.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
-                          'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                        }`}>
-                          {booking.status.replace('_', ' ')}
-                        </span>
-                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        booking.status === 'completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                        booking.status === 'no_show' ? 'bg-destructive/10 text-destructive' :
+                        booking.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
+                        'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                      }`}>
+                        {booking.status.replace('_', ' ')}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
+        )}
+
+        {client && (
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button
+              variant={client.isBlacklisted ? "outline" : "destructive"}
+              size="sm"
+              disabled={toggling}
+              onClick={handleToggleBlacklist}
+              className={client.isBlacklisted ? "border-emerald-500 text-emerald-700 hover:bg-emerald-50" : ""}
+            >
+              {toggling
+                ? "Saving…"
+                : client.isBlacklisted
+                  ? "✅ Unblock Client"
+                  : "🚫 Block from Booking"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Close</Button>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

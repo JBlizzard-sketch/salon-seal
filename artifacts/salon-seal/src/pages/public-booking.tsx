@@ -98,11 +98,14 @@ export default function PublicBooking() {
           setCreatedBookingId(data.id);
           setStep("success");
         },
-        onError: () => {
+        onError: (err: any) => {
+          const isBlocked = err?.response?.status === 403 || err?.message?.includes("BLACKLISTED");
           toast({
-            title: "Booking failed",
-            description: "There was an error creating your booking. Please try again.",
-            variant: "destructive"
+            title: isBlocked ? "Booking unavailable" : "Booking failed",
+            description: isBlocked
+              ? "We're unable to accept new bookings from this number. Please contact the salon directly."
+              : "There was an error creating your booking. Please try again.",
+            variant: "destructive",
           });
         }
       }

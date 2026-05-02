@@ -607,6 +607,38 @@ paths:
         "404":
           description: Not found
 
+  /salons/{salonId}/clients/{id}/blacklist:
+    patch:
+      operationId: setClientBlacklist
+      tags: [clients]
+      summary: Block or unblock a client from making new bookings
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetBlacklistBody"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDetail"
+        "404":
+          description: Not found
+
   # ── Dashboard ─────────────────────────────────────────────────────────────────
   /salons/{salonId}/dashboard:
     get:
@@ -1030,6 +1062,8 @@ components:
           type: integer
         totalSpent:
           type: integer
+        isBlacklisted:
+          type: boolean
         lastVisitAt:
           type: ["string", "null"]
           format: date-time
@@ -1044,6 +1078,7 @@ components:
         - totalVisits
         - noShowCount
         - totalSpent
+        - isBlacklisted
         - createdAt
 
     ClientDetail:
@@ -1063,6 +1098,8 @@ components:
           type: integer
         totalSpent:
           type: integer
+        isBlacklisted:
+          type: boolean
         lastVisitAt:
           type: ["string", "null"]
           format: date-time
@@ -1081,8 +1118,17 @@ components:
         - totalVisits
         - noShowCount
         - totalSpent
+        - isBlacklisted
         - createdAt
         - recentBookings
+
+    SetBlacklistBody:
+      type: object
+      properties:
+        isBlacklisted:
+          type: boolean
+      required:
+        - isBlacklisted
 
     DashboardSummary:
       type: object

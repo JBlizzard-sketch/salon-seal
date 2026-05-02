@@ -577,6 +577,7 @@ export const ListClientsResponseItem = zod.object({
   totalVisits: zod.number(),
   noShowCount: zod.number(),
   totalSpent: zod.number(),
+  isBlacklisted: zod.boolean(),
   lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
@@ -598,6 +599,60 @@ export const GetClientResponse = zod.object({
   totalVisits: zod.number(),
   noShowCount: zod.number(),
   totalSpent: zod.number(),
+  isBlacklisted: zod.boolean(),
+  lastVisitAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+  recentBookings: zod.array(
+    zod.object({
+      id: zod.number(),
+      salonId: zod.number(),
+      serviceId: zod.number(),
+      staffId: zod.number().nullish(),
+      clientId: zod.number(),
+      clientName: zod.string(),
+      clientPhone: zod.string(),
+      appointmentAt: zod.coerce.date(),
+      status: zod.enum([
+        "pending",
+        "confirmed",
+        "arrived",
+        "completed",
+        "cancelled",
+        "no_show",
+      ]),
+      depositAmount: zod.number(),
+      depositPaid: zod.boolean(),
+      mpesaRef: zod.string().nullish(),
+      refundEligible: zod.boolean(),
+      notes: zod.string().nullish(),
+      serviceName: zod.string(),
+      staffName: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Block or unblock a client from making new bookings
+ */
+export const SetClientBlacklistParams = zod.object({
+  salonId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const SetClientBlacklistBody = zod.object({
+  isBlacklisted: zod.boolean(),
+});
+
+export const SetClientBlacklistResponse = zod.object({
+  id: zod.number(),
+  salonId: zod.number(),
+  name: zod.string(),
+  phone: zod.string(),
+  totalVisits: zod.number(),
+  noShowCount: zod.number(),
+  totalSpent: zod.number(),
+  isBlacklisted: zod.boolean(),
   lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   recentBookings: zod.array(
