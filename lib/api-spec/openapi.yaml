@@ -22,6 +22,8 @@ tags:
     description: Client management
   - name: dashboard
     description: Dashboard analytics
+  - name: reminders
+    description: WhatsApp reminder management
 
 paths:
   /healthz:
@@ -463,6 +465,76 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CancellationResult"
+
+  # ── Reminders ──────────────────────────────────────────────────────────────────
+  /bookings/{id}/send-reminder:
+    post:
+      operationId: sendBookingReminder
+      tags: [reminders]
+      summary: Send a WhatsApp reminder for a specific booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendReminderBody"
+      responses:
+        "200":
+          description: Reminder sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendReminderResponse"
+        "400":
+          description: Cannot send reminder (booking is cancelled/completed/no_show)
+        "404":
+          description: Not found
+
+  /salons/{salonId}/reminders/process:
+    post:
+      operationId: processReminders
+      tags: [reminders]
+      summary: Auto-process all due 24h and 2h reminders for a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Process results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessRemindersResponse"
+
+  /salons/{salonId}/reminders:
+    get:
+      operationId: listReminders
+      tags: [reminders]
+      summary: List all WhatsApp reminders sent for a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of sent reminders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReminderItem"
 
   # ── Clients ───────────────────────────────────────────────────────────────────
   /salons/{salonId}/clients:
@@ -1124,6 +1196,92 @@ components:
         - mpesaRef
         - message
 
+    ReminderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        bookingId:
+          type: integer
+        salonId:
+          type: integer
+        type:
+          type: string
+          enum: [24h, 2h, manual]
+        channel:
+          type: string
+        phoneNumber:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+          enum: [sent, failed]
+        messageId:
+          type: ["string", "null"]
+        sentAt:
+          type: string
+          format: date-time
+        clientName:
+          type: string
+        serviceName:
+          type: string
+        appointmentAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - bookingId
+        - salonId
+        - type
+        - channel
+        - phoneNumber
+        - message
+        - status
+        - sentAt
+        - clientName
+        - serviceName
+        - appointmentAt
+
+    SendReminderBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [24h, 2h, manual]
+      required:
+        - type
+
+    SendReminderResponse:
+      type: object
+      properties:
+        reminder:
+          $ref: "#/components/schemas/ReminderItem"
+        message:
+          type: string
+        waMessageId:
+          type: string
+      required:
+        - reminder
+        - message
+        - waMessageId
+
+    ProcessRemindersResponse:
+      type: object
+      properties:
+        sent:
+          type: integer
+        skipped:
+          type: integer
+        reminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReminderItem"
+      required:
+        - sent
+        - skipped
+        - reminders
+
     ActivityItem:
       type: object
       properties:
@@ -1131,7 +1289,7 @@ components:
           type: integer
         type:
           type: string
-          enum: [booking_created, booking_confirmed, booking_completed, booking_cancelled, no_show, deposit_received, refund_issued]
+          enum: [booking_created, booking_confirmed, booking_completed, booking_cancelled, no_show, deposit_received, refund_issued, reminder_sent]
         bookingId:
           type: integer
         clientName:

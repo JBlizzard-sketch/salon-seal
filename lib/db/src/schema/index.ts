@@ -4,3 +4,4 @@ export * from "./staff";
 export * from "./clients";
 export * from "./bookings";
 export * from "./activity";
+export * from "./reminders";

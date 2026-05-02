@@ -31,9 +31,13 @@ import type {
   GetRecentActivityParams,
   HealthStatus,
   ListBookingsParams,
+  ProcessRemindersResponse,
+  ReminderItem,
   Salon,
   SalonAnalytics,
   SalonPublic,
+  SendReminderBody,
+  SendReminderResponse,
   Service,
   SimulatePaymentResponse,
   StaffMember,
@@ -1761,6 +1765,267 @@ export const useCancelBooking = <
 > => {
   return useMutation(getCancelBookingMutationOptions(options));
 };
+
+/**
+ * @summary Send a WhatsApp reminder for a specific booking
+ */
+export const getSendBookingReminderUrl = (id: number) => {
+  return `/api/bookings/${id}/send-reminder`;
+};
+
+export const sendBookingReminder = async (
+  id: number,
+  sendReminderBody: SendReminderBody,
+  options?: RequestInit,
+): Promise<SendReminderResponse> => {
+  return customFetch<SendReminderResponse>(getSendBookingReminderUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendReminderBody),
+  });
+};
+
+export const getSendBookingReminderMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendBookingReminder>>,
+    TError,
+    { id: number; data: BodyType<SendReminderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendBookingReminder>>,
+  TError,
+  { id: number; data: BodyType<SendReminderBody> },
+  TContext
+> => {
+  const mutationKey = ["sendBookingReminder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendBookingReminder>>,
+    { id: number; data: BodyType<SendReminderBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return sendBookingReminder(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendBookingReminderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendBookingReminder>>
+>;
+export type SendBookingReminderMutationBody = BodyType<SendReminderBody>;
+export type SendBookingReminderMutationError = ErrorType<void>;
+
+/**
+ * @summary Send a WhatsApp reminder for a specific booking
+ */
+export const useSendBookingReminder = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendBookingReminder>>,
+    TError,
+    { id: number; data: BodyType<SendReminderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendBookingReminder>>,
+  TError,
+  { id: number; data: BodyType<SendReminderBody> },
+  TContext
+> => {
+  return useMutation(getSendBookingReminderMutationOptions(options));
+};
+
+/**
+ * @summary Auto-process all due 24h and 2h reminders for a salon
+ */
+export const getProcessRemindersUrl = (salonId: number) => {
+  return `/api/salons/${salonId}/reminders/process`;
+};
+
+export const processReminders = async (
+  salonId: number,
+  options?: RequestInit,
+): Promise<ProcessRemindersResponse> => {
+  return customFetch<ProcessRemindersResponse>(
+    getProcessRemindersUrl(salonId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getProcessRemindersMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof processReminders>>,
+    TError,
+    { salonId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof processReminders>>,
+  TError,
+  { salonId: number },
+  TContext
+> => {
+  const mutationKey = ["processReminders"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof processReminders>>,
+    { salonId: number }
+  > = (props) => {
+    const { salonId } = props ?? {};
+
+    return processReminders(salonId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProcessRemindersMutationResult = NonNullable<
+  Awaited<ReturnType<typeof processReminders>>
+>;
+
+export type ProcessRemindersMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Auto-process all due 24h and 2h reminders for a salon
+ */
+export const useProcessReminders = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof processReminders>>,
+    TError,
+    { salonId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof processReminders>>,
+  TError,
+  { salonId: number },
+  TContext
+> => {
+  return useMutation(getProcessRemindersMutationOptions(options));
+};
+
+/**
+ * @summary List all WhatsApp reminders sent for a salon
+ */
+export const getListRemindersUrl = (salonId: number) => {
+  return `/api/salons/${salonId}/reminders`;
+};
+
+export const listReminders = async (
+  salonId: number,
+  options?: RequestInit,
+): Promise<ReminderItem[]> => {
+  return customFetch<ReminderItem[]>(getListRemindersUrl(salonId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRemindersQueryKey = (salonId: number) => {
+  return [`/api/salons/${salonId}/reminders`] as const;
+};
+
+export const getListRemindersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listReminders>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReminders>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRemindersQueryKey(salonId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listReminders>>> = ({
+    signal,
+  }) => listReminders(salonId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!salonId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listReminders>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRemindersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listReminders>>
+>;
+export type ListRemindersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all WhatsApp reminders sent for a salon
+ */
+
+export function useListReminders<
+  TData = Awaited<ReturnType<typeof listReminders>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReminders>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRemindersQueryOptions(salonId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List clients for a salon (CRM view)

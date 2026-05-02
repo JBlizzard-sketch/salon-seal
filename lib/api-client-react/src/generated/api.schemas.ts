@@ -276,6 +276,65 @@ export interface SimulatePaymentResponse {
   message: string;
 }
 
+export type ReminderItemType =
+  (typeof ReminderItemType)[keyof typeof ReminderItemType];
+
+export const ReminderItemType = {
+  "24h": "24h",
+  "2h": "2h",
+  manual: "manual",
+} as const;
+
+export type ReminderItemStatus =
+  (typeof ReminderItemStatus)[keyof typeof ReminderItemStatus];
+
+export const ReminderItemStatus = {
+  sent: "sent",
+  failed: "failed",
+} as const;
+
+export interface ReminderItem {
+  id: number;
+  bookingId: number;
+  salonId: number;
+  type: ReminderItemType;
+  channel: string;
+  phoneNumber: string;
+  message: string;
+  status: ReminderItemStatus;
+  /** @nullable */
+  messageId?: string | null;
+  sentAt: string;
+  clientName: string;
+  serviceName: string;
+  appointmentAt: string;
+}
+
+export type SendReminderBodyType =
+  (typeof SendReminderBodyType)[keyof typeof SendReminderBodyType];
+
+export const SendReminderBodyType = {
+  "24h": "24h",
+  "2h": "2h",
+  manual: "manual",
+} as const;
+
+export interface SendReminderBody {
+  type: SendReminderBodyType;
+}
+
+export interface SendReminderResponse {
+  reminder: ReminderItem;
+  message: string;
+  waMessageId: string;
+}
+
+export interface ProcessRemindersResponse {
+  sent: number;
+  skipped: number;
+  reminders: ReminderItem[];
+}
+
 export type ActivityItemType =
   (typeof ActivityItemType)[keyof typeof ActivityItemType];
 
@@ -287,6 +346,7 @@ export const ActivityItemType = {
   no_show: "no_show",
   deposit_received: "deposit_received",
   refund_issued: "refund_issued",
+  reminder_sent: "reminder_sent",
 } as const;
 
 export interface ActivityItem {

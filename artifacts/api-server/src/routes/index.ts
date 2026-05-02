@@ -6,6 +6,7 @@ import staffRouter from "./staff";
 import bookingsRouter from "./bookings";
 import clientsRouter from "./clients";
 import dashboardRouter from "./dashboard";
+import remindersRouter from "./reminders";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(staffRouter);
 router.use(bookingsRouter);
 router.use(clientsRouter);
 router.use(dashboardRouter);
+router.use(remindersRouter);
 
 export default router;

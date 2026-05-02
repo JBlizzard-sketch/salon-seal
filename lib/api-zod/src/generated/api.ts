@@ -467,6 +467,90 @@ export const CancelBookingResponse = zod.object({
 });
 
 /**
+ * @summary Send a WhatsApp reminder for a specific booking
+ */
+export const SendBookingReminderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendBookingReminderBody = zod.object({
+  type: zod.enum(["24h", "2h", "manual"]),
+});
+
+export const SendBookingReminderResponse = zod.object({
+  reminder: zod.object({
+    id: zod.number(),
+    bookingId: zod.number(),
+    salonId: zod.number(),
+    type: zod.enum(["24h", "2h", "manual"]),
+    channel: zod.string(),
+    phoneNumber: zod.string(),
+    message: zod.string(),
+    status: zod.enum(["sent", "failed"]),
+    messageId: zod.string().nullish(),
+    sentAt: zod.coerce.date(),
+    clientName: zod.string(),
+    serviceName: zod.string(),
+    appointmentAt: zod.coerce.date(),
+  }),
+  message: zod.string(),
+  waMessageId: zod.string(),
+});
+
+/**
+ * @summary Auto-process all due 24h and 2h reminders for a salon
+ */
+export const ProcessRemindersParams = zod.object({
+  salonId: zod.coerce.number(),
+});
+
+export const ProcessRemindersResponse = zod.object({
+  sent: zod.number(),
+  skipped: zod.number(),
+  reminders: zod.array(
+    zod.object({
+      id: zod.number(),
+      bookingId: zod.number(),
+      salonId: zod.number(),
+      type: zod.enum(["24h", "2h", "manual"]),
+      channel: zod.string(),
+      phoneNumber: zod.string(),
+      message: zod.string(),
+      status: zod.enum(["sent", "failed"]),
+      messageId: zod.string().nullish(),
+      sentAt: zod.coerce.date(),
+      clientName: zod.string(),
+      serviceName: zod.string(),
+      appointmentAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary List all WhatsApp reminders sent for a salon
+ */
+export const ListRemindersParams = zod.object({
+  salonId: zod.coerce.number(),
+});
+
+export const ListRemindersResponseItem = zod.object({
+  id: zod.number(),
+  bookingId: zod.number(),
+  salonId: zod.number(),
+  type: zod.enum(["24h", "2h", "manual"]),
+  channel: zod.string(),
+  phoneNumber: zod.string(),
+  message: zod.string(),
+  status: zod.enum(["sent", "failed"]),
+  messageId: zod.string().nullish(),
+  sentAt: zod.coerce.date(),
+  clientName: zod.string(),
+  serviceName: zod.string(),
+  appointmentAt: zod.coerce.date(),
+});
+export const ListRemindersResponse = zod.array(ListRemindersResponseItem);
+
+/**
  * @summary List clients for a salon (CRM view)
  */
 export const ListClientsParams = zod.object({
@@ -641,6 +725,7 @@ export const GetRecentActivityResponseItem = zod.object({
     "no_show",
     "deposit_received",
     "refund_issued",
+    "reminder_sent",
   ]),
   bookingId: zod.number(),
   clientName: zod.string(),
