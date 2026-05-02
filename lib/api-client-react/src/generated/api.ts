@@ -28,6 +28,7 @@ import type {
   CreateServiceBody,
   CreateStaffMemberBody,
   DashboardSummary,
+  DepositNudgeResponse,
   GetRecentActivityParams,
   HealthStatus,
   ListBookingsParams,
@@ -1764,6 +1765,90 @@ export const useCancelBooking = <
   TContext
 > => {
   return useMutation(getCancelBookingMutationOptions(options));
+};
+
+/**
+ * @summary Send a WhatsApp M-Pesa payment request to client for unpaid deposit
+ */
+export const getSendDepositNudgeUrl = (id: number) => {
+  return `/api/bookings/${id}/send-deposit-nudge`;
+};
+
+export const sendDepositNudge = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DepositNudgeResponse> => {
+  return customFetch<DepositNudgeResponse>(getSendDepositNudgeUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSendDepositNudgeMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendDepositNudge>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendDepositNudge>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["sendDepositNudge"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendDepositNudge>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return sendDepositNudge(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendDepositNudgeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendDepositNudge>>
+>;
+
+export type SendDepositNudgeMutationError = ErrorType<void>;
+
+/**
+ * @summary Send a WhatsApp M-Pesa payment request to client for unpaid deposit
+ */
+export const useSendDepositNudge = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendDepositNudge>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendDepositNudge>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getSendDepositNudgeMutationOptions(options));
 };
 
 /**

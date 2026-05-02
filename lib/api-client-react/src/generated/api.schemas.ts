@@ -276,6 +276,11 @@ export interface SimulatePaymentResponse {
   message: string;
 }
 
+export interface DepositNudgeResponse {
+  message: string;
+  waMessageId: string;
+}
+
 export type ReminderItemType =
   (typeof ReminderItemType)[keyof typeof ReminderItemType];
 
@@ -347,6 +352,7 @@ export const ActivityItemType = {
   deposit_received: "deposit_received",
   refund_issued: "refund_issued",
   reminder_sent: "reminder_sent",
+  deposit_nudge_sent: "deposit_nudge_sent",
 } as const;
 
 export interface ActivityItem {

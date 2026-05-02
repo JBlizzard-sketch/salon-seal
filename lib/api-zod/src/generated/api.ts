@@ -467,6 +467,18 @@ export const CancelBookingResponse = zod.object({
 });
 
 /**
+ * @summary Send a WhatsApp M-Pesa payment request to client for unpaid deposit
+ */
+export const SendDepositNudgeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendDepositNudgeResponse = zod.object({
+  message: zod.string(),
+  waMessageId: zod.string(),
+});
+
+/**
  * @summary Send a WhatsApp reminder for a specific booking
  */
 export const SendBookingReminderParams = zod.object({
@@ -726,6 +738,7 @@ export const GetRecentActivityResponseItem = zod.object({
     "deposit_received",
     "refund_issued",
     "reminder_sent",
+    "deposit_nudge_sent",
   ]),
   bookingId: zod.number(),
   clientName: zod.string(),

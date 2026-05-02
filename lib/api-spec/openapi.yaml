@@ -466,6 +466,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/CancellationResult"
 
+  /bookings/{id}/send-deposit-nudge:
+    post:
+      operationId: sendDepositNudge
+      tags: [bookings]
+      summary: Send a WhatsApp M-Pesa payment request to client for unpaid deposit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Nudge sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositNudgeResponse"
+        "400":
+          description: Deposit already paid or booking in invalid state
+        "404":
+          description: Not found
+
   # ── Reminders ──────────────────────────────────────────────────────────────────
   /bookings/{id}/send-reminder:
     post:
@@ -1196,6 +1219,17 @@ components:
         - mpesaRef
         - message
 
+    DepositNudgeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        waMessageId:
+          type: string
+      required:
+        - message
+        - waMessageId
+
     ReminderItem:
       type: object
       properties:
@@ -1289,7 +1323,7 @@ components:
           type: integer
         type:
           type: string
-          enum: [booking_created, booking_confirmed, booking_completed, booking_cancelled, no_show, deposit_received, refund_issued, reminder_sent]
+          enum: [booking_created, booking_confirmed, booking_completed, booking_cancelled, no_show, deposit_received, refund_issued, reminder_sent, deposit_nudge_sent]
         bookingId:
           type: integer
         clientName:

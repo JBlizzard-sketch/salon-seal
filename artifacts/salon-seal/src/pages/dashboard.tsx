@@ -204,6 +204,7 @@ export default function Dashboard() {
                         {item.type === "deposit_received" && <span className="text-emerald-600">Deposit Received</span>}
                         {item.type === "refund_issued" && "Refund Issued"}
                         {item.type === "reminder_sent" && <span className="text-blue-600">📱 Reminder Sent</span>}
+                        {item.type === "deposit_nudge_sent" && <span className="text-amber-600">💳 Deposit Request Sent</span>}
                       </p>
                       <p className="text-xs text-muted-foreground">{item.clientName} • {item.serviceName}</p>
                     </div>

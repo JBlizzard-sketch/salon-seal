@@ -220,6 +220,48 @@ router.post("/bookings/:id/simulate-payment", async (req, res): Promise<void> =>
   });
 });
 
+router.post("/bookings/:id/send-deposit-nudge", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid booking id" });
+    return;
+  }
+
+  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id));
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  if (booking.depositPaid) {
+    res.status(400).json({ error: "Deposit already paid" });
+    return;
+  }
+  if (["cancelled", "completed", "no_show"].includes(booking.status)) {
+    res.status(400).json({ error: `Cannot nudge a ${booking.status} booking` });
+    return;
+  }
+
+  const apptDate = new Date(booking.appointmentAt);
+  const dateStr = apptDate.toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", timeZone: "Africa/Nairobi" });
+  const timeStr = apptDate.toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Nairobi" });
+
+  const waMessageId = "WA-" + Date.now() + Math.floor(Math.random() * 10000);
+
+  await db.insert(activityTable).values({
+    salonId: booking.salonId,
+    bookingId: booking.id,
+    type: "deposit_nudge_sent",
+    clientName: booking.clientName,
+    serviceName: booking.serviceName,
+    amount: booking.depositAmount,
+  });
+
+  res.json({
+    message: `Hi ${booking.clientName}! 👋 Your *${booking.serviceName}* appointment at Lavish Beauty Studio is on *${dateStr} at ${timeStr}*.\n\nTo confirm your spot, please pay your deposit of *Ksh ${booking.depositAmount}* via M-Pesa:\n📱 Paybill: *247247*\nAccount: *SALON${String(booking.salonId).padStart(3,"0")}*\nAmount: *Ksh ${booking.depositAmount}*\n\nBooking Ref: #${booking.id}. Questions? Call us!`,
+    waMessageId,
+  });
+});
+
 router.post("/bookings/:id/cancel", async (req, res): Promise<void> => {
   const params = CancelBookingParams.safeParse(req.params);
   if (!params.success) {
