@@ -296,6 +296,7 @@ export const ListBookingsResponseItem = zod.object({
   notes: zod.string().nullish(),
   serviceName: zod.string(),
   staffName: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListBookingsResponse = zod.array(ListBookingsResponseItem);
@@ -344,6 +345,7 @@ export const GetBookingResponse = zod.object({
   notes: zod.string().nullish(),
   serviceName: zod.string(),
   staffName: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -382,6 +384,7 @@ export const UpdateBookingStatusResponse = zod.object({
   notes: zod.string().nullish(),
   serviceName: zod.string(),
   staffName: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -417,6 +420,7 @@ export const SimulateMpesaPaymentResponse = zod.object({
     notes: zod.string().nullish(),
     serviceName: zod.string(),
     staffName: zod.string().nullish(),
+    durationMinutes: zod.number().nullish(),
     createdAt: zod.coerce.date(),
   }),
   mpesaRef: zod.string(),
@@ -459,6 +463,7 @@ export const CancelBookingResponse = zod.object({
     notes: zod.string().nullish(),
     serviceName: zod.string(),
     staffName: zod.string().nullish(),
+    durationMinutes: zod.number().nullish(),
     createdAt: zod.coerce.date(),
   }),
   refundEligible: zod.boolean(),
@@ -627,6 +632,7 @@ export const GetClientResponse = zod.object({
       notes: zod.string().nullish(),
       serviceName: zod.string(),
       staffName: zod.string().nullish(),
+      durationMinutes: zod.number().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -680,6 +686,7 @@ export const SetClientBlacklistResponse = zod.object({
       notes: zod.string().nullish(),
       serviceName: zod.string(),
       staffName: zod.string().nullish(),
+      durationMinutes: zod.number().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -725,6 +732,7 @@ export const GetDashboardSummaryResponse = zod.object({
       notes: zod.string().nullish(),
       serviceName: zod.string(),
       staffName: zod.string().nullish(),
+      durationMinutes: zod.number().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),

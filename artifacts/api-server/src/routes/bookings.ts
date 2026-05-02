@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { db, bookingsTable, clientsTable, activityTable, salonsTable } from "@workspace/db";
+import { eq, and, gte, lte, sql, getTableColumns } from "drizzle-orm";
+import { db, bookingsTable, clientsTable, activityTable, salonsTable, servicesTable } from "@workspace/db";
 import {
   CreateBookingBody,
   UpdateBookingStatusBody,
@@ -33,9 +33,14 @@ router.get("/bookings", async (req, res): Promise<void> => {
     conditions.push(gte(bookingsTable.appointmentAt, day));
     conditions.push(lte(bookingsTable.appointmentAt, next));
   }
+  const baseQuery = db
+    .select({ ...getTableColumns(bookingsTable), durationMinutes: servicesTable.durationMinutes })
+    .from(bookingsTable)
+    .leftJoin(servicesTable, eq(bookingsTable.serviceId, servicesTable.id))
+    .orderBy(bookingsTable.appointmentAt);
   const bookings = conditions.length
-    ? await db.select().from(bookingsTable).where(and(...conditions)).orderBy(bookingsTable.appointmentAt)
-    : await db.select().from(bookingsTable).orderBy(bookingsTable.appointmentAt);
+    ? await baseQuery.where(and(...conditions))
+    : await baseQuery;
   res.json(ListBookingsResponse.parse(bookings));
 });
 
@@ -61,7 +66,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
 
   // Get service for deposit amount
-  const { servicesTable, staffTable } = await import("@workspace/db");
+  const { staffTable } = await import("@workspace/db");
   const [service] = await db.select().from(servicesTable).where(eq(servicesTable.id, serviceId));
   if (!service) {
     res.status(404).json({ error: "Service not found" });

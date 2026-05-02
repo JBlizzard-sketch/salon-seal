@@ -157,6 +157,8 @@ export interface Booking {
   serviceName: string;
   /** @nullable */
   staffName?: string | null;
+  /** @nullable */
+  durationMinutes?: number | null;
   createdAt: string;
 }
 
