@@ -1083,6 +1083,19 @@ components:
         - saturday
         - sunday
 
+    NotificationPrefs:
+      type: object
+      properties:
+        remind24h:
+          type: boolean
+        remind2h:
+          type: boolean
+        whatsappNumber:
+          type: ["string", "null"]
+      required:
+        - remind24h
+        - remind2h
+
     Salon:
       type: object
       properties:
@@ -1108,6 +1121,8 @@ components:
           type: ["integer", "null"]
         businessHours:
           $ref: "#/components/schemas/BusinessHours"
+        notificationPrefs:
+          $ref: "#/components/schemas/NotificationPrefs"
         isActive:
           type: boolean
         createdAt:
@@ -1124,6 +1139,7 @@ components:
         - monthlyRevenueGoal
         - autoBlacklistThreshold
         - businessHours
+        - notificationPrefs
         - isActive
         - createdAt
 
@@ -1206,6 +1222,8 @@ components:
           type: ["integer", "null"]
         businessHours:
           $ref: "#/components/schemas/BusinessHours"
+        notificationPrefs:
+          $ref: "#/components/schemas/NotificationPrefs"
         isActive:
           type: ["boolean", "null"]
 
@@ -1226,6 +1244,8 @@ components:
           type: integer
         depositAmount:
           type: integer
+        depositPercent:
+          type: ["integer", "null"]
         durationMinutes:
           type: integer
         isActive:
@@ -1253,6 +1273,8 @@ components:
           type: integer
         depositAmount:
           type: integer
+        depositPercent:
+          type: ["integer", "null"]
         durationMinutes:
           type: integer
       required:
@@ -1273,6 +1295,8 @@ components:
         price:
           type: ["integer", "null"]
         depositAmount:
+          type: ["integer", "null"]
+        depositPercent:
           type: ["integer", "null"]
         durationMinutes:
           type: ["integer", "null"]
@@ -1882,6 +1906,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HourCount"
+        noShowHeatmap:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoShowHeatmapCell"
       required:
         - summary
         - peakDays
@@ -1890,6 +1918,7 @@ components:
         - monthlyRevenue
         - staffPerformance
         - peakHours
+        - noShowHeatmap
 
     AnalyticsSummary:
       type: object
@@ -1995,6 +2024,23 @@ components:
         - bookings
         - revenue
         - noShows
+
+    NoShowHeatmapCell:
+      type: object
+      properties:
+        day:
+          type: integer
+        dayLabel:
+          type: string
+        hour:
+          type: integer
+        count:
+          type: integer
+      required:
+        - day
+        - dayLabel
+        - hour
+        - count
 
     StaffPerformance:
       type: object

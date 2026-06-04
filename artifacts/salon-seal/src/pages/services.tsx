@@ -52,7 +52,6 @@ export default function Services() {
     return matchSearch && matchCat;
   });
 
-  // Group by category
   const grouped: Record<string, typeof filteredServices> = {};
   const uncategorised: typeof filteredServices = [];
   for (const s of filteredServices) {
@@ -148,7 +147,12 @@ export default function Services() {
                       </div>
                       <div className="text-sm">{service.durationMinutes} min</div>
                       <div className="text-sm font-medium">Ksh {service.price.toLocaleString()}</div>
-                      <div className="text-sm text-amber-600 font-medium">Ksh {service.depositAmount.toLocaleString()}</div>
+                      <div className="text-sm text-amber-600 font-medium">
+                        Ksh {service.depositAmount.toLocaleString()}
+                        {service.depositPercent != null && (
+                          <span className="ml-1 text-xs text-muted-foreground">({service.depositPercent}%)</span>
+                        )}
+                      </div>
                       <div className="text-right">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${service.isActive ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
                           {service.isActive ? "Active" : "Inactive"}
@@ -179,7 +183,10 @@ function ServiceFormDialog({ salonId, open, onClose, service }: { salonId: numbe
 
   const [formData, setFormData] = useState(service
     ? { ...service, category: service.category ?? "" }
-    : { name: "", description: "", category: "", price: "", depositAmount: "", durationMinutes: "60", isActive: true }
+    : { name: "", description: "", category: "", price: "", depositAmount: "", depositPercent: "", durationMinutes: "60", isActive: true }
+  );
+  const [depositMode, setDepositMode] = useState<"flat" | "percent">(
+    service?.depositPercent != null ? "percent" : "flat"
   );
   const [customCategory, setCustomCategory] = useState(
     service?.category && !PRESET_CATEGORIES.includes(service.category) ? service.category : ""
@@ -190,6 +197,26 @@ function ServiceFormDialog({ salonId, open, onClose, service }: { salonId: numbe
 
   const effectiveCategory = useCustom ? customCategory : (formData.category || null);
 
+  const handlePriceChange = (val: string) => {
+    const price = Number(val) || 0;
+    const pct = Number(formData.depositPercent) || 0;
+    if (depositMode === "percent" && pct > 0) {
+      setFormData({ ...formData, price: val, depositAmount: String(Math.round(price * pct / 100)) });
+    } else {
+      setFormData({ ...formData, price: val });
+    }
+  };
+
+  const handlePercentChange = (val: string) => {
+    const pct = Number(val) || 0;
+    const price = Number(formData.price) || 0;
+    setFormData({
+      ...formData,
+      depositPercent: val,
+      depositAmount: pct > 0 && price > 0 ? String(Math.round(price * pct / 100)) : formData.depositAmount,
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const payload = {
@@ -198,6 +225,7 @@ function ServiceFormDialog({ salonId, open, onClose, service }: { salonId: numbe
       category: effectiveCategory || null,
       price: Number(formData.price),
       depositAmount: Number(formData.depositAmount),
+      depositPercent: depositMode === "percent" && formData.depositPercent ? Number(formData.depositPercent) : null,
       durationMinutes: Number(formData.durationMinutes),
       isActive: formData.isActive,
     };
@@ -239,24 +267,22 @@ function ServiceFormDialog({ salonId, open, onClose, service }: { salonId: numbe
           <div className="space-y-2">
             <Label>Category</Label>
             {!useCustom ? (
-              <div className="flex gap-2">
-                <Select
-                  value={formData.category || ""}
-                  onValueChange={(v) => {
-                    if (v === "__custom__") { setUseCustom(true); }
-                    else setFormData({ ...formData, category: v });
-                  }}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select category…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {PRESET_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    <SelectItem value="__custom__">+ Custom category…</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select
+                value={formData.category || ""}
+                onValueChange={(v) => {
+                  if (v === "__custom__") { setUseCustom(true); }
+                  else setFormData({ ...formData, category: v });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {PRESET_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  <SelectItem value="__custom__">+ Custom category…</SelectItem>
+                </SelectContent>
+              </Select>
             ) : (
               <div className="flex gap-2">
                 <Input
@@ -272,15 +298,65 @@ function ServiceFormDialog({ salonId, open, onClose, service }: { salonId: numbe
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="price">Price (Ksh)</Label>
-              <Input id="price" type="number" required min="0" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} />
+          <div className="space-y-2">
+            <Label htmlFor="price">Price (Ksh)</Label>
+            <Input id="price" type="number" required min="0" value={formData.price} onChange={(e) => handlePriceChange(e.target.value)} />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-1">
+              <Label>Deposit</Label>
+              <div className="flex items-center text-xs border rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  className={`px-2.5 py-1 transition-colors ${depositMode === "flat" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                  onClick={() => setDepositMode("flat")}
+                >
+                  Flat (Ksh)
+                </button>
+                <button
+                  type="button"
+                  className={`px-2.5 py-1 transition-colors ${depositMode === "percent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                  onClick={() => setDepositMode("percent")}
+                >
+                  % of price
+                </button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="depositAmount">Deposit (Ksh)</Label>
-              <Input id="depositAmount" type="number" required min="0" value={formData.depositAmount} onChange={(e) => setFormData({ ...formData, depositAmount: e.target.value })} />
-            </div>
+            {depositMode === "flat" ? (
+              <Input
+                type="number"
+                required
+                min="0"
+                value={formData.depositAmount}
+                onChange={(e) => setFormData({ ...formData, depositAmount: e.target.value })}
+                placeholder="e.g. 500"
+              />
+            ) : (
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    required
+                    value={formData.depositPercent}
+                    onChange={(e) => handlePercentChange(e.target.value)}
+                    placeholder="e.g. 30"
+                    className="pr-8"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                </div>
+                <div className="text-sm text-muted-foreground shrink-0">
+                  = Ksh {Number(formData.depositAmount) > 0 ? Number(formData.depositAmount).toLocaleString() : "—"}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {depositMode === "percent"
+                ? "Deposit auto-computes as a % of the service price."
+                : "Fixed amount clients pay to secure their booking."}
+            </p>
           </div>
 
           <div className="space-y-2">

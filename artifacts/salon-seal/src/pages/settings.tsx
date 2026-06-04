@@ -60,6 +60,9 @@ export default function Settings() {
   const [businessHours, setBusinessHours] = useState<BusinessHours>(DEFAULT_HOURS);
   const [hoursDirty, setHoursDirty] = useState(false);
 
+  const [notifPrefs, setNotifPrefs] = useState({ remind24h: true, remind2h: true, whatsappNumber: "" });
+  const [notifDirty, setNotifDirty] = useState(false);
+
   useEffect(() => {
     if (salon) {
       setFormData({
@@ -73,6 +76,11 @@ export default function Settings() {
         autoBlacklistThreshold: salon.autoBlacklistThreshold ?? 0,
       });
       setBusinessHours(salon.businessHours ?? DEFAULT_HOURS);
+      setNotifPrefs({
+        remind24h: salon.notificationPrefs?.remind24h ?? true,
+        remind2h: salon.notificationPrefs?.remind2h ?? true,
+        whatsappNumber: salon.notificationPrefs?.whatsappNumber ?? "",
+      });
     }
   }, [salon]);
 
@@ -108,6 +116,28 @@ export default function Settings() {
           setHoursDirty(false);
           queryClient.invalidateQueries({ queryKey: getGetSalonQueryKey(salonId) });
           toast({ title: "Business hours saved", description: "Your schedule has been updated." });
+        }
+      }
+    );
+  };
+
+  const handleSaveNotifPrefs = () => {
+    updateSalon.mutate(
+      {
+        id: salonId,
+        data: {
+          notificationPrefs: {
+            remind24h: notifPrefs.remind24h,
+            remind2h: notifPrefs.remind2h,
+            whatsappNumber: notifPrefs.whatsappNumber || null,
+          }
+        }
+      },
+      {
+        onSuccess: () => {
+          setNotifDirty(false);
+          queryClient.invalidateQueries({ queryKey: getGetSalonQueryKey(salonId) });
+          toast({ title: "Notification preferences saved" });
         }
       }
     );
@@ -258,6 +288,63 @@ export default function Settings() {
         </Card>
       </form>
 
+      {/* Notification Preferences */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Notification Preferences</CardTitle>
+          <CardDescription>
+            Configure automated WhatsApp reminders sent to clients before their appointments.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <p className="font-medium text-sm">24-hour reminder</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically send a WhatsApp reminder 24 hours before each appointment.
+              </p>
+            </div>
+            <Switch
+              checked={notifPrefs.remind24h}
+              onCheckedChange={(v) => { setNotifPrefs(p => ({ ...p, remind24h: v })); setNotifDirty(true); }}
+            />
+          </div>
+          <div className="h-px bg-border" />
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <p className="font-medium text-sm">2-hour reminder</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically send a WhatsApp reminder 2 hours before each appointment.
+              </p>
+            </div>
+            <Switch
+              checked={notifPrefs.remind2h}
+              onCheckedChange={(v) => { setNotifPrefs(p => ({ ...p, remind2h: v })); setNotifDirty(true); }}
+            />
+          </div>
+          <div className="h-px bg-border" />
+          <div className="space-y-2 pt-1">
+            <Label htmlFor="whatsappNumber">Business WhatsApp Number</Label>
+            <Input
+              id="whatsappNumber"
+              type="tel"
+              placeholder="+254 7XX XXX XXX"
+              value={notifPrefs.whatsappNumber}
+              onChange={(e) => { setNotifPrefs(p => ({ ...p, whatsappNumber: e.target.value })); setNotifDirty(true); }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Used as the sender number for WhatsApp reminders. Leave blank to use the default.
+            </p>
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-end border-t p-6">
+          <Button onClick={handleSaveNotifPrefs} disabled={updateSalon.isPending || !notifDirty}>
+            {updateSalon.isPending ? "Saving…" : "Save Preferences"}
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {/* Business Hours */}
       <Card>
         <CardHeader>
           <CardTitle>Business Hours</CardTitle>

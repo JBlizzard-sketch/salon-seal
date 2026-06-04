@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export type BusinessDayHours = { isOpen: boolean; openTime: string; closeTime: string };
 export type BusinessHours = Record<"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday", BusinessDayHours>;
+export type NotificationPrefs = { remind24h: boolean; remind2h: boolean; whatsappNumber?: string | null };
 
 export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   monday:    { isOpen: true,  openTime: "09:00", closeTime: "18:00" },
@@ -27,6 +28,7 @@ export const salonsTable = pgTable("salons", {
   monthlyRevenueGoal: integer("monthly_revenue_goal"),
   autoBlacklistThreshold: integer("auto_blacklist_threshold"),
   businessHours: jsonb("business_hours").$type<BusinessHours>(),
+  notificationPrefs: jsonb("notification_prefs").$type<NotificationPrefs>(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

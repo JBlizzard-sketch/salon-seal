@@ -10,6 +10,7 @@ export const servicesTable = pgTable("services", {
   description: text("description"),
   price: integer("price").notNull(),
   depositAmount: integer("deposit_amount").notNull(),
+  depositPercent: integer("deposit_percent"),
   category: text("category"),
   durationMinutes: integer("duration_minutes").notNull().default(60),
   isActive: boolean("is_active").notNull().default(true),

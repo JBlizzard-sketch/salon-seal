@@ -62,7 +62,8 @@ router.get("/salons/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Salon not found" });
     return;
   }
-  res.json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
+  const DEFAULT_NOTIF_PREFS = { remind24h: true, remind2h: true, whatsappNumber: null };
+  res.json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, notificationPrefs: salon.notificationPrefs ?? DEFAULT_NOTIF_PREFS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
 });
 
 router.patch("/salons/:id", async (req, res): Promise<void> => {
@@ -85,7 +86,8 @@ router.patch("/salons/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Salon not found" });
     return;
   }
-  res.json(UpdateSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
+  const DEFAULT_NOTIF_PREFS2 = { remind24h: true, remind2h: true, whatsappNumber: null };
+  res.json(UpdateSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, notificationPrefs: salon.notificationPrefs ?? DEFAULT_NOTIF_PREFS2, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
 });
 
 export default router;

@@ -65,6 +65,11 @@ export const ListSalonsResponseItem = zod.object({
       closeTime: zod.string(),
     }),
   }),
+  notificationPrefs: zod.object({
+    remind24h: zod.boolean(),
+    remind2h: zod.boolean(),
+    whatsappNumber: zod.string().nullish(),
+  }),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -137,6 +142,11 @@ export const GetSalonResponse = zod.object({
       closeTime: zod.string(),
     }),
   }),
+  notificationPrefs: zod.object({
+    remind24h: zod.boolean(),
+    remind2h: zod.boolean(),
+    whatsappNumber: zod.string().nullish(),
+  }),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -195,6 +205,13 @@ export const UpdateSalonBody = zod.object({
       }),
     })
     .optional(),
+  notificationPrefs: zod
+    .object({
+      remind24h: zod.boolean(),
+      remind2h: zod.boolean(),
+      whatsappNumber: zod.string().nullish(),
+    })
+    .optional(),
   isActive: zod.boolean().nullish(),
 });
 
@@ -245,6 +262,11 @@ export const UpdateSalonResponse = zod.object({
       openTime: zod.string(),
       closeTime: zod.string(),
     }),
+  }),
+  notificationPrefs: zod.object({
+    remind24h: zod.boolean(),
+    remind2h: zod.boolean(),
+    whatsappNumber: zod.string().nullish(),
   }),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
@@ -311,6 +333,7 @@ export const GetSalonBySlugResponse = zod.object({
       category: zod.string().nullable(),
       price: zod.number(),
       depositAmount: zod.number(),
+      depositPercent: zod.number().nullish(),
       durationMinutes: zod.number(),
       isActive: zod.boolean(),
     }),
@@ -342,6 +365,7 @@ export const ListServicesResponseItem = zod.object({
   category: zod.string().nullable(),
   price: zod.number(),
   depositAmount: zod.number(),
+  depositPercent: zod.number().nullish(),
   durationMinutes: zod.number(),
   isActive: zod.boolean(),
 });
@@ -360,6 +384,7 @@ export const CreateServiceBody = zod.object({
   category: zod.string().nullish(),
   price: zod.number(),
   depositAmount: zod.number(),
+  depositPercent: zod.number().nullish(),
   durationMinutes: zod.number(),
 });
 
@@ -377,6 +402,7 @@ export const UpdateServiceBody = zod.object({
   category: zod.string().nullish(),
   price: zod.number().nullish(),
   depositAmount: zod.number().nullish(),
+  depositPercent: zod.number().nullish(),
   durationMinutes: zod.number().nullish(),
   isActive: zod.boolean().nullish(),
 });
@@ -389,6 +415,7 @@ export const UpdateServiceResponse = zod.object({
   category: zod.string().nullable(),
   price: zod.number(),
   depositAmount: zod.number(),
+  depositPercent: zod.number().nullish(),
   durationMinutes: zod.number(),
   isActive: zod.boolean(),
 });
@@ -1380,6 +1407,14 @@ export const GetSalonAnalyticsResponse = zod.object({
     zod.object({
       hour: zod.number(),
       label: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  noShowHeatmap: zod.array(
+    zod.object({
+      day: zod.number(),
+      dayLabel: zod.string(),
+      hour: zod.number(),
       count: zod.number(),
     }),
   ),

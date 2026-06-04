@@ -25,6 +25,13 @@ export interface BusinessHours {
   sunday: BusinessDayHours;
 }
 
+export interface NotificationPrefs {
+  remind24h: boolean;
+  remind2h: boolean;
+  /** @nullable */
+  whatsappNumber?: string | null;
+}
+
 export interface Salon {
   id: number;
   name: string;
@@ -40,6 +47,7 @@ export interface Salon {
   /** @nullable */
   autoBlacklistThreshold: number | null;
   businessHours: BusinessHours;
+  notificationPrefs: NotificationPrefs;
   isActive: boolean;
   createdAt: string;
 }
@@ -54,6 +62,8 @@ export interface Service {
   category: string | null;
   price: number;
   depositAmount: number;
+  /** @nullable */
+  depositPercent?: number | null;
   durationMinutes: number;
   isActive: boolean;
 }
@@ -108,6 +118,7 @@ export interface UpdateSalonBody {
   /** @nullable */
   autoBlacklistThreshold?: number | null;
   businessHours?: BusinessHours;
+  notificationPrefs?: NotificationPrefs;
   /** @nullable */
   isActive?: boolean | null;
 }
@@ -120,6 +131,8 @@ export interface CreateServiceBody {
   category?: string | null;
   price: number;
   depositAmount: number;
+  /** @nullable */
+  depositPercent?: number | null;
   durationMinutes: number;
 }
 
@@ -134,6 +147,8 @@ export interface UpdateServiceBody {
   price?: number | null;
   /** @nullable */
   depositAmount?: number | null;
+  /** @nullable */
+  depositPercent?: number | null;
   /** @nullable */
   durationMinutes?: number | null;
   /** @nullable */
@@ -469,6 +484,13 @@ export interface HourCount {
   count: number;
 }
 
+export interface NoShowHeatmapCell {
+  day: number;
+  dayLabel: string;
+  hour: number;
+  count: number;
+}
+
 export interface SalonAnalytics {
   summary: AnalyticsSummary;
   peakDays: DayCount[];
@@ -477,6 +499,7 @@ export interface SalonAnalytics {
   monthlyRevenue: MonthlyRevenuePoint[];
   staffPerformance: StaffPerformance[];
   peakHours: HourCount[];
+  noShowHeatmap: NoShowHeatmapCell[];
 }
 
 export interface SimulatePaymentResponse {

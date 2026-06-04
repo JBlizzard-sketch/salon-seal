@@ -217,9 +217,65 @@ router.get("/salons/:salonId/analytics", async (req, res): Promise<void> => {
     count: hourCounts[h] ?? 0,
   })).filter(p => p.count > 0);
 
+  // No-show heatmap: day (0=Sun..6=Sat) × hour
+  const noShowCells: Record<string, number> = {};
+  for (const b of noShows) {
+    const d = new Date(b.appointmentAt);
+    const key = `${d.getDay()}_${d.getHours()}`;
+    noShowCells[key] = (noShowCells[key] ?? 0) + 1;
+  }
+  const noShowHeatmap = Object.entries(noShowCells).map(([key, count]) => {
+    const [day, hour] = key.split("_").map(Number);
+    return { day, dayLabel: dayNames[day], hour, count };
+  });
+
   res.json(
-    GetSalonAnalyticsResponse.parse({ summary, peakDays, popularServices, weeklyTrend, monthlyRevenue, staffPerformance, peakHours }),
+    GetSalonAnalyticsResponse.parse({ summary, peakDays, popularServices, weeklyTrend, monthlyRevenue, staffPerformance, peakHours, noShowHeatmap }),
   );
+});
+
+router.get("/salons/:salonId/analytics/export", async (req, res): Promise<void> => {
+  const salonId = parseInt(req.params.salonId, 10);
+  if (isNaN(salonId)) { res.status(400).json({ error: "Invalid salonId" }); return; }
+
+  const period = (req.query.period as string) || "all";
+  const now = new Date();
+  let cutoff: Date | null = null;
+  if (period === "week") { cutoff = new Date(now); cutoff.setDate(now.getDate() - 7); }
+  else if (period === "month") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 1); }
+  else if (period === "3months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 3); }
+  else if (period === "6months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 6); }
+
+  const bookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(
+      cutoff
+        ? and(eq(bookingsTable.salonId, salonId), gte(bookingsTable.appointmentAt, cutoff))
+        : eq(bookingsTable.salonId, salonId),
+    );
+
+  const rows = [
+    ["Date", "Client", "Phone", "Service", "Staff", "Status", "Price (Ksh)", "Deposit (Ksh)", "Deposit Paid", "M-Pesa Ref"],
+    ...bookings.map(b => [
+      new Date(b.appointmentAt).toISOString().split("T")[0],
+      b.clientName,
+      b.clientPhone,
+      b.serviceName,
+      b.staffName ?? "",
+      b.status,
+      "",
+      String(b.depositAmount),
+      b.depositPaid ? "Yes" : "No",
+      b.mpesaRef ?? "",
+    ]),
+  ];
+
+  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="salon-analytics-${period}.csv"`);
+  res.send(csv);
 });
 
 router.get("/salons/:salonId/recent-activity", async (req, res): Promise<void> => {
