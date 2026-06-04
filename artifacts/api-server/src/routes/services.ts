@@ -52,7 +52,7 @@ router.patch("/salons/:salonId/services/:id", async (req, res): Promise<void> =>
   }
   const updates: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(parsed.data)) {
-    if (v !== null && v !== undefined) updates[k] = v;
+    if (v !== undefined) updates[k] = v;
   }
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);

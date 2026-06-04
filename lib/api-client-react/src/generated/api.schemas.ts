@@ -25,6 +25,42 @@ export interface BusinessHours {
   sunday: BusinessDayHours;
 }
 
+export interface RevenueReportSummary {
+  totalRevenue: number;
+  totalDeposits: number;
+  totalBookings: number;
+  completedBookings: number;
+  noShowBookings: number;
+}
+
+export interface RevenueReportServiceRow {
+  serviceName: string;
+  bookings: number;
+  revenue: number;
+  deposits: number;
+}
+
+export interface RevenueReportStaffRow {
+  staffName: string;
+  bookings: number;
+  revenue: number;
+  noShows: number;
+}
+
+export type RevenueReportPeriod = {
+  /** @nullable */
+  from: string | null;
+  /** @nullable */
+  to: string | null;
+};
+
+export interface RevenueReport {
+  period: RevenueReportPeriod;
+  summary: RevenueReportSummary;
+  byService: RevenueReportServiceRow[];
+  byStaff: RevenueReportStaffRow[];
+}
+
 /**
  * Which delivery channels to use for reminder messages
  */
@@ -656,6 +692,32 @@ export const GetSalonAnalyticsPeriod = {
   "3months": "3months",
   "6months": "6months",
   all: "all",
+} as const;
+
+export type GetRevenueReportParams = {
+  from?: string;
+  to?: string;
+  period?: GetRevenueReportPeriod;
+  format?: GetRevenueReportFormat;
+};
+
+export type GetRevenueReportPeriod =
+  (typeof GetRevenueReportPeriod)[keyof typeof GetRevenueReportPeriod];
+
+export const GetRevenueReportPeriod = {
+  week: "week",
+  month: "month",
+  "3months": "3months",
+  "6months": "6months",
+  all: "all",
+} as const;
+
+export type GetRevenueReportFormat =
+  (typeof GetRevenueReportFormat)[keyof typeof GetRevenueReportFormat];
+
+export const GetRevenueReportFormat = {
+  csv: "csv",
+  json: "json",
 } as const;
 
 export type GetRecentActivityParams = {

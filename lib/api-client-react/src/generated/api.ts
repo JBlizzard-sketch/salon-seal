@@ -36,6 +36,7 @@ import type {
   DeleteStaffBlock200,
   DepositNudgeResponse,
   GetRecentActivityParams,
+  GetRevenueReportParams,
   GetSalonAnalyticsParams,
   GetStaffBusySlotsParams,
   GetStaffPerformanceParams,
@@ -47,6 +48,7 @@ import type {
   ProcessRemindersResponse,
   ReminderItem,
   RescheduleBookingBody,
+  RevenueReport,
   Salon,
   SalonAnalytics,
   SalonPublic,
@@ -3755,6 +3757,126 @@ export function useGetSalonAnalytics<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetSalonAnalyticsQueryOptions(
+    salonId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Revenue report aggregated by service and staff; supports CSV download
+ */
+export const getGetRevenueReportUrl = (
+  salonId: number,
+  params?: GetRevenueReportParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/salons/${salonId}/reports/revenue?${stringifiedParams}`
+    : `/api/salons/${salonId}/reports/revenue`;
+};
+
+export const getRevenueReport = async (
+  salonId: number,
+  params?: GetRevenueReportParams,
+  options?: RequestInit,
+): Promise<RevenueReport | string> => {
+  return customFetch<RevenueReport | string>(
+    getGetRevenueReportUrl(salonId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetRevenueReportQueryKey = (
+  salonId: number,
+  params?: GetRevenueReportParams,
+) => {
+  return [
+    `/api/salons/${salonId}/reports/revenue`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetRevenueReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRevenueReport>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  params?: GetRevenueReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRevenueReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRevenueReportQueryKey(salonId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRevenueReport>>
+  > = ({ signal }) =>
+    getRevenueReport(salonId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!salonId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRevenueReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRevenueReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRevenueReport>>
+>;
+export type GetRevenueReportQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Revenue report aggregated by service and staff; supports CSV download
+ */
+
+export function useGetRevenueReport<
+  TData = Awaited<ReturnType<typeof getRevenueReport>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  params?: GetRevenueReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRevenueReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRevenueReportQueryOptions(
     salonId,
     params,
     options,

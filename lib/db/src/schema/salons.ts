@@ -4,7 +4,8 @@ import { z } from "zod/v4";
 
 export type BusinessDayHours = { isOpen: boolean; openTime: string; closeTime: string };
 export type BusinessHours = Record<"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday", BusinessDayHours>;
-export type NotificationPrefs = { remind24h: boolean; remind2h: boolean; whatsappNumber?: string | null };
+export type NotificationChannels = { sms: boolean; whatsapp: boolean; email: boolean };
+export type NotificationPrefs = { remind24h: boolean; remind2h: boolean; channels: NotificationChannels; whatsappNumber?: string | null };
 
 export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   monday:    { isOpen: true,  openTime: "09:00", closeTime: "18:00" },

@@ -1007,6 +1007,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/SalonAnalytics"
 
+  /salons/{salonId}/reports/revenue:
+    get:
+      operationId: getRevenueReport
+      tags: [dashboard]
+      summary: Revenue report aggregated by service and staff; supports CSV download
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [week, month, 3months, 6months, all]
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, json]
+      responses:
+        "200":
+          description: Revenue report JSON or booking CSV download
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueReport"
+            text/csv:
+              schema:
+                type: string
+
   /salons/{salonId}/recent-activity:
     get:
       operationId: getRecentActivity
@@ -1082,6 +1128,89 @@ components:
         - friday
         - saturday
         - sunday
+
+    RevenueReportSummary:
+      type: object
+      properties:
+        totalRevenue:
+          type: integer
+        totalDeposits:
+          type: integer
+        totalBookings:
+          type: integer
+        completedBookings:
+          type: integer
+        noShowBookings:
+          type: integer
+      required:
+        - totalRevenue
+        - totalDeposits
+        - totalBookings
+        - completedBookings
+        - noShowBookings
+
+    RevenueReportServiceRow:
+      type: object
+      properties:
+        serviceName:
+          type: string
+        bookings:
+          type: integer
+        revenue:
+          type: integer
+        deposits:
+          type: integer
+      required:
+        - serviceName
+        - bookings
+        - revenue
+        - deposits
+
+    RevenueReportStaffRow:
+      type: object
+      properties:
+        staffName:
+          type: string
+        bookings:
+          type: integer
+        revenue:
+          type: integer
+        noShows:
+          type: integer
+      required:
+        - staffName
+        - bookings
+        - revenue
+        - noShows
+
+    RevenueReport:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: ["string", "null"]
+            to:
+              type: ["string", "null"]
+          required:
+            - from
+            - to
+        summary:
+          $ref: "#/components/schemas/RevenueReportSummary"
+        byService:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueReportServiceRow"
+        byStaff:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueReportStaffRow"
+      required:
+        - period
+        - summary
+        - byService
+        - byStaff
 
     NotificationChannels:
       type: object

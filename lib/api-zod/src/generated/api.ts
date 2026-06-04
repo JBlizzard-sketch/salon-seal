@@ -1449,6 +1449,50 @@ export const GetSalonAnalyticsResponse = zod.object({
 });
 
 /**
+ * @summary Revenue report aggregated by service and staff; supports CSV download
+ */
+export const GetRevenueReportParams = zod.object({
+  salonId: zod.coerce.number(),
+});
+
+export const GetRevenueReportQueryParams = zod.object({
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+  period: zod.enum(["week", "month", "3months", "6months", "all"]).optional(),
+  format: zod.enum(["csv", "json"]).optional(),
+});
+
+export const GetRevenueReportResponse = zod.object({
+  period: zod.object({
+    from: zod.string().nullable(),
+    to: zod.string().nullable(),
+  }),
+  summary: zod.object({
+    totalRevenue: zod.number(),
+    totalDeposits: zod.number(),
+    totalBookings: zod.number(),
+    completedBookings: zod.number(),
+    noShowBookings: zod.number(),
+  }),
+  byService: zod.array(
+    zod.object({
+      serviceName: zod.string(),
+      bookings: zod.number(),
+      revenue: zod.number(),
+      deposits: zod.number(),
+    }),
+  ),
+  byStaff: zod.array(
+    zod.object({
+      staffName: zod.string(),
+      bookings: zod.number(),
+      revenue: zod.number(),
+      noShows: zod.number(),
+    }),
+  ),
+});
+
+/**
  * @summary Recent bookings activity feed
  */
 export const GetRecentActivityParams = zod.object({
