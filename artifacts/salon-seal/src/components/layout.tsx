@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Calendar, Users, Scissors, UserCheck, BarChart3, Settings, ScissorsSquare } from "lucide-react";
+import { LayoutDashboard, Calendar, Users, Scissors, UserCheck, BarChart3, Bell, Settings, ScissorsSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -9,6 +9,7 @@ const navigation = [
   { name: "Services", href: "/services", icon: Scissors },
   { name: "Staff", href: "/staff", icon: UserCheck },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

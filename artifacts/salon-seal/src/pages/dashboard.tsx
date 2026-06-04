@@ -10,6 +10,8 @@ import {
   getListBookingsQueryKey,
   useSendBookingReminder,
   useUpdateBookingStatus,
+  useGetSalon,
+  getGetSalonQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,10 @@ export default function Dashboard() {
 
   const { data: summary, isLoading, error } = useGetDashboardSummary(salonId, {
     query: { queryKey: getGetDashboardSummaryQueryKey(salonId) },
+  });
+
+  const { data: salon } = useGetSalon(salonId, {
+    query: { queryKey: getGetSalonQueryKey(salonId) },
   });
 
   const { data: activity } = useGetRecentActivity(salonId, { limit: 10 }, {
@@ -186,6 +192,44 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Monthly Revenue Goal */}
+      {salon?.monthlyRevenueGoal != null && salon.monthlyRevenueGoal > 0 && (() => {
+        const goal = salon.monthlyRevenueGoal!;
+        const current = summary.monthRevenue;
+        const pct = Math.min(Math.round((current / goal) * 100), 100);
+        const remaining = Math.max(goal - current, 0);
+        const monthName = now.toLocaleString("default", { month: "long" });
+        const isAhead = current >= goal;
+        return (
+          <Card className={isAhead ? "border-emerald-400 dark:border-emerald-600" : ""}>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{monthName} Revenue Goal</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isAhead
+                      ? `🎉 Goal reached! Ksh ${current.toLocaleString()} earned this month.`
+                      : `Ksh ${remaining.toLocaleString()} to go · ${pct}% complete`}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className={`text-lg font-bold ${isAhead ? "text-emerald-600" : "text-foreground"}`}>
+                    Ksh {current.toLocaleString()}
+                  </span>
+                  <span className="text-sm text-muted-foreground"> / {goal.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                <div
+                  className={`h-2.5 rounded-full transition-all duration-500 ${isAhead ? "bg-emerald-500" : pct >= 75 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-primary"}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Today's Schedule */}
       <Card>

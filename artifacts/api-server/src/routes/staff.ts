@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, staffTable } from "@workspace/db";
+import { db, staffTable, bookingsTable } from "@workspace/db";
 import {
   CreateStaffMemberBody,
   UpdateStaffMemberBody,
@@ -22,6 +22,56 @@ router.get("/salons/:salonId/staff", async (req, res): Promise<void> => {
   }
   const staff = await db.select().from(staffTable).where(eq(staffTable.salonId, params.data.salonId));
   res.json(ListStaffResponse.parse(staff));
+});
+
+router.get("/salons/:salonId/staff/performance", async (req, res): Promise<void> => {
+  const salonId = parseInt(req.params.salonId);
+  if (isNaN(salonId)) { res.status(400).json({ error: "Invalid salonId" }); return; }
+
+  const period = (req.query.period as string) || "month";
+  const now = new Date();
+  let cutoff: Date | null = null;
+  if (period === "week") { cutoff = new Date(now); cutoff.setDate(now.getDate() - 7); }
+  else if (period === "month") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 1); }
+  else if (period === "3months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 3); }
+  else if (period === "6months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 6); }
+
+  const [allStaff, bookings] = await Promise.all([
+    db.select().from(staffTable).where(eq(staffTable.salonId, salonId)),
+    db.select().from(bookingsTable).where(
+      cutoff
+        ? and(eq(bookingsTable.salonId, salonId), eq(bookingsTable.salonId, salonId))
+        : eq(bookingsTable.salonId, salonId),
+    ),
+  ]);
+
+  const cutoffTime = cutoff?.getTime() ?? 0;
+  const filtered = cutoff
+    ? bookings.filter(b => new Date(b.appointmentAt).getTime() >= cutoffTime)
+    : bookings;
+
+  // Aggregate per staff
+  const map = new Map<number, { completedBookings: number; totalRevenue: number; noShowCount: number; totalBookings: number }>();
+  for (const s of allStaff) map.set(s.id, { completedBookings: 0, totalRevenue: 0, noShowCount: 0, totalBookings: 0 });
+
+  for (const b of filtered) {
+    if (b.staffId == null) continue;
+    const entry = map.get(b.staffId);
+    if (!entry) continue;
+    entry.totalBookings++;
+    if (b.status === "completed") { entry.completedBookings++; entry.totalRevenue += b.depositAmount; }
+    if (b.status === "no_show") entry.noShowCount++;
+  }
+
+  const entries = allStaff.map(s => {
+    const e = map.get(s.id)!;
+    const nonCancelled = filtered.filter(b => b.staffId === s.id && b.status !== "cancelled").length;
+    const noShowRate = nonCancelled > 0 ? Math.round((e.noShowCount / nonCancelled) * 1000) / 10 : 0;
+    const avgBookingValue = e.completedBookings > 0 ? Math.round(e.totalRevenue / e.completedBookings) : 0;
+    return { staffId: s.id, staffName: s.name, role: s.role, isActive: s.isActive, ...e, noShowRate, avgBookingValue };
+  }).sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+  res.json({ period, entries });
 });
 
 router.post("/salons/:salonId/staff", async (req, res): Promise<void> => {

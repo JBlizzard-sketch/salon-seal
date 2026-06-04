@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useRoute } from "wouter";
-import { useGetSalonBySlug, getGetSalonBySlugQueryKey, useCreateBooking, useSimulateMpesaPayment } from "@workspace/api-client-react";
+import { useGetSalonBySlug, getGetSalonBySlugQueryKey, useCreateBooking, useSimulateMpesaPayment, useGetStaffBusySlots, useAddToWaitlist } from "@workspace/api-client-react";
 import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,10 +26,19 @@ export default function PublicBooking() {
   const createBooking = useCreateBooking();
   const simulatePayment = useSimulateMpesaPayment();
 
-  const [step, setStep] = useState<"service" | "datetime" | "details" | "success">("service");
+  const busySlotsDate = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
+  const { data: busySlotsData } = useGetStaffBusySlots(
+    salon?.id ?? 0,
+    selectedStaffId ?? 0,
+    { date: busySlotsDate },
+    { query: { enabled: !!selectedStaffId && !!selectedDate && !!salon } },
+  );
+
+  const [step, setStep] = useState<"service" | "stylist" | "datetime" | "details" | "success">("service");
   const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
   const [mpesaResult, setMpesaResult] = useState<{ ref: string; message: string } | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   
@@ -38,42 +47,81 @@ export default function PublicBooking() {
     phone: "",
     notes: ""
   });
+  const [conflictSlot, setConflictSlot] = useState<{
+    staffId: number | null; serviceId: number; appointmentAt: string;
+    serviceName: string; staffName: string | null;
+  } | null>(null);
+  const [waitlistJoined, setWaitlistJoined] = useState(false);
+  const addToWaitlist = useAddToWaitlist();
 
   const selectedService = useMemo(() => {
     if (!salon || !selectedServiceId) return null;
     return salon.services.find(s => s.id === selectedServiceId) || null;
   }, [salon, selectedServiceId]);
 
-  // Generate next 7 days
+  const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+
+  // Generate next 28 days, marking closed days
   const availableDates = useMemo(() => {
-    const dates = [];
+    const dates: { date: Date; isClosed: boolean }[] = [];
     const today = startOfDay(new Date());
-    for (let i = 0; i < 7; i++) {
-      dates.push(addDays(today, i));
+    const bh = salon?.businessHours;
+    for (let i = 0; i < 28; i++) {
+      const date = addDays(today, i);
+      const dayName = DAY_NAMES[date.getDay()];
+      const isClosed = bh ? !bh[dayName].isOpen : false;
+      dates.push({ date, isClosed });
     }
     return dates;
-  }, []);
+  }, [salon]);
 
-  // Generate time slots (9am to 6pm in 1-hour increments)
+  // Compute which slots are blocked by the selected stylist's existing bookings
+  const blockedSlotTimes = useMemo(() => {
+    if (!selectedStaffId || !busySlotsData || !selectedService) return new Set<string>();
+    const blocked = new Set<string>();
+    for (const busy of busySlotsData.busySlots) {
+      const busyStart = new Date(busy.appointmentAt).getTime();
+      const busyEnd = busyStart + busy.durationMinutes * 60 * 1000;
+      const newDuration = selectedService.durationMinutes * 60 * 1000;
+      // A slot at slotTime conflicts if: slotTime < busyEnd AND slotTime + newDuration > busyStart
+      // i.e., slotTime in (busyStart - newDuration, busyEnd)
+      blocked.add(busy.appointmentAt);
+      // also block slots that would overlap the busy window
+      if (newDuration > 60 * 60 * 1000) {
+        const slotIntervalMs = 60 * 60 * 1000;
+        for (let t = busyStart - newDuration + slotIntervalMs; t < busyEnd; t += slotIntervalMs) {
+          blocked.add(new Date(t).toISOString());
+        }
+      }
+    }
+    return blocked;
+  }, [selectedStaffId, busySlotsData, selectedService]);
+
+  // Generate time slots based on business hours
   const availableTimeSlots = useMemo(() => {
-    if (!selectedDate) return [];
-    
-    const slots = [];
-    const startHour = 9;
-    const endHour = 18;
+    if (!selectedDate || !salon) return [];
+
+    const dayName = DAY_NAMES[selectedDate.getDay()];
+    const bh = salon.businessHours;
+    const dayHours = bh?.[dayName];
+    if (dayHours && !dayHours.isOpen) return [];
+
+    const [startH, startM] = (dayHours?.openTime ?? "09:00").split(":").map(Number);
+    const [endH, endM] = (dayHours?.closeTime ?? "18:00").split(":").map(Number);
+    const startMins = startH * 60 + startM;
+    const endMins = endH * 60 + endM;
+
+    const slots: Date[] = [];
     const now = new Date();
-    
-    for (let hour = startHour; hour <= endHour; hour++) {
+    for (let m = startMins; m < endMins; m += 60) {
       const slotTime = new Date(selectedDate);
-      slotTime.setHours(hour, 0, 0, 0);
-      
-      // Only include future times
-      if (isBefore(now, slotTime) || !isSameDay(now, selectedDate)) {
+      slotTime.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      if (!isSameDay(now, selectedDate) || isBefore(now, slotTime)) {
         slots.push(slotTime);
       }
     }
     return slots;
-  }, [selectedDate]);
+  }, [selectedDate, salon]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +135,7 @@ export default function PublicBooking() {
         data: {
           salonId: salon.id,
           serviceId: selectedServiceId,
+          staffId: selectedStaffId,
           clientName: formData.name,
           clientPhone: formData.phone,
           appointmentAt,
@@ -95,18 +144,33 @@ export default function PublicBooking() {
       },
       {
         onSuccess: (data) => {
-          setCreatedBookingId(data.id);
+          setCreatedBookingId(data.booking.id);
           setStep("success");
         },
         onError: (err: any) => {
-          const isBlocked = err?.response?.status === 403 || err?.message?.includes("BLACKLISTED");
-          toast({
-            title: isBlocked ? "Booking unavailable" : "Booking failed",
-            description: isBlocked
-              ? "We're unable to accept new bookings from this number. Please contact the salon directly."
-              : "There was an error creating your booking. Please try again.",
-            variant: "destructive",
-          });
+          const status = err?.response?.status;
+          const serverError = err?.response?.data?.error;
+          const isBlocked = status === 403 || serverError === "BLACKLISTED";
+          const isConflict = status === 409 || serverError === "STAFF_CONFLICT";
+          if (isConflict && selectedServiceId && selectedTime && selectedService) {
+            setConflictSlot({
+              staffId: selectedStaffId,
+              serviceId: selectedServiceId,
+              appointmentAt: selectedTime,
+              serviceName: selectedService.name,
+              staffName: selectedStaffId
+                ? (salon?.staff?.find(s => s.id === selectedStaffId)?.name ?? null)
+                : null,
+            });
+          } else {
+            toast({
+              title: isBlocked ? "Booking unavailable" : "Booking failed",
+              description: isBlocked
+                ? "We're unable to accept new bookings from this number. Please contact the salon directly."
+                : "There was an error creating your booking. Please try again.",
+              variant: "destructive",
+            });
+          }
         }
       }
     );
@@ -164,6 +228,7 @@ export default function PublicBooking() {
     const resetWizard = () => {
       setStep("service");
       setSelectedServiceId(null);
+      setSelectedStaffId(null);
       setSelectedDate(null);
       setSelectedTime(null);
       setFormData({ name: "", phone: "", notes: "" });
@@ -283,7 +348,9 @@ export default function PublicBooking() {
                 size="icon" 
                 className="h-8 w-8 mr-2 -ml-2 rounded-full"
                 onClick={() => {
-                  if (step === "datetime") setStep("service");
+                  const hasStaff = (salon.staff ?? []).filter(s => s.isActive).length > 0;
+                  if (step === "stylist") setStep("service");
+                  if (step === "datetime") setStep(hasStaff ? "stylist" : "service");
                   if (step === "details") setStep("datetime");
                 }}
               >
@@ -293,70 +360,139 @@ export default function PublicBooking() {
             <div>
               <CardTitle className="text-xl">
                 {step === "service" && "Select Service"}
+                {step === "stylist" && "Choose Stylist"}
                 {step === "datetime" && "Choose Date & Time"}
                 {step === "details" && "Your Details"}
               </CardTitle>
             </div>
           </div>
           
-          <div className="flex items-center justify-between mt-4">
-            <div className={`h-1.5 flex-1 rounded-l-full ${step === "service" ? "bg-primary" : "bg-primary"}`} />
-            <div className="w-1 h-1.5 bg-background" />
-            <div className={`h-1.5 flex-1 ${step === "datetime" || step === "details" ? "bg-primary" : "bg-muted"}`} />
-            <div className="w-1 h-1.5 bg-background" />
-            <div className={`h-1.5 flex-1 rounded-r-full ${step === "details" ? "bg-primary" : "bg-muted"}`} />
-          </div>
+          {(() => {
+            const hasStaff = (salon.staff ?? []).filter(s => s.isActive).length > 0;
+            const steps = hasStaff
+              ? ["service", "stylist", "datetime", "details"]
+              : ["service", "datetime", "details"];
+            const idx = steps.indexOf(step as string);
+            return (
+              <div className="flex items-center justify-between mt-4">
+                {steps.map((s, i) => (
+                  <span key={s} className="contents">
+                    <div className={`h-1.5 flex-1 ${i === 0 ? "rounded-l-full" : ""} ${i === steps.length - 1 ? "rounded-r-full" : ""} ${i <= idx ? "bg-primary" : "bg-muted"}`} />
+                    {i < steps.length - 1 && <div className="w-1 h-1.5 bg-background" />}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </CardHeader>
 
         <CardContent>
+          {step === "stylist" && (() => {
+            const activeStaff = (salon.staff ?? []).filter(s => s.isActive);
+            return (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground mb-1">Optional — pick a specific stylist or choose "Any available".</p>
+                {[{ id: null as number | null, name: "Any available", role: "We'll assign the best available stylist" }, ...activeStaff].map((member) => {
+                  const isSelected = selectedStaffId === member.id;
+                  return (
+                    <div
+                      key={member.id ?? "any"}
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                        isSelected ? "border-primary bg-primary/5" : "border-transparent bg-muted hover:bg-muted/80"
+                      }`}
+                      onClick={() => setSelectedStaffId(member.id)}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${
+                        isSelected ? "bg-primary text-primary-foreground" : "bg-muted-foreground/15 text-muted-foreground"
+                      }`}>
+                        {member.id === null ? "✦" : member.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold">{member.name}</p>
+                        <p className="text-sm text-muted-foreground">{member.role}</p>
+                      </div>
+                      {isSelected && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0"><span className="text-primary-foreground text-xs font-bold">✓</span></div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {step === "service" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {salon.services.filter(s => s.isActive).length === 0 ? (
                 <div className="text-center p-6 text-muted-foreground bg-muted/50 rounded-lg">
                   No services currently available for booking.
                 </div>
-              ) : (
-                <RadioGroup 
-                  value={selectedServiceId?.toString()} 
-                  onValueChange={(val) => setSelectedServiceId(parseInt(val))}
-                  className="space-y-3"
-                >
-                  {salon.services.filter(s => s.isActive).map((service) => (
-                    <div 
-                      key={service.id}
-                      className={`flex items-start p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                        selectedServiceId === service.id 
-                          ? 'border-primary bg-primary/5' 
-                          : 'border-transparent bg-muted hover:bg-muted/80'
-                      }`}
-                      onClick={() => setSelectedServiceId(service.id)}
-                    >
-                      <RadioGroupItem 
-                        value={service.id.toString()} 
-                        id={`service-${service.id}`} 
-                        className="mt-1 sr-only" 
-                      />
-                      <div className="flex-1 flex justify-between gap-4">
-                        <div>
-                          <Label htmlFor={`service-${service.id}`} className="font-semibold text-base cursor-pointer">
-                            {service.name}
-                          </Label>
-                          {service.description && (
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{service.description}</p>
-                          )}
-                          <div className="flex items-center gap-3 mt-2 text-xs font-medium text-muted-foreground">
-                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {service.durationMinutes} min</span>
-                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-500"><CreditCard className="w-3 h-3" /> Ksh {service.depositAmount} deposit</span>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="font-bold">Ksh {service.price.toLocaleString()}</span>
+              ) : (() => {
+                const active = salon.services.filter(s => s.isActive);
+                // Group by category
+                const grouped: Record<string, typeof active> = {};
+                const uncategorised: typeof active = [];
+                for (const s of active) {
+                  if (!s.category) { uncategorised.push(s); }
+                  else {
+                    if (!grouped[s.category]) grouped[s.category] = [];
+                    grouped[s.category].push(s);
+                  }
+                }
+                const keys = Object.keys(grouped).sort();
+                if (uncategorised.length > 0) keys.push("__uncategorised__");
+                const hasCategories = keys.length > 1 || (keys.length === 1 && keys[0] !== "__uncategorised__");
+
+                const ServiceCard = ({ service }: { service: typeof active[0] }) => (
+                  <div
+                    key={service.id}
+                    className={`flex items-start p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                      selectedServiceId === service.id
+                        ? "border-primary bg-primary/5"
+                        : "border-transparent bg-muted hover:bg-muted/80"
+                    }`}
+                    onClick={() => setSelectedServiceId(service.id)}
+                  >
+                    <RadioGroupItem value={service.id.toString()} id={`service-${service.id}`} className="mt-1 sr-only" />
+                    <div className="flex-1 flex justify-between gap-4">
+                      <div>
+                        <Label htmlFor={`service-${service.id}`} className="font-semibold text-base cursor-pointer">
+                          {service.name}
+                        </Label>
+                        {service.description && (
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{service.description}</p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 text-xs font-medium text-muted-foreground">
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {service.durationMinutes} min</span>
+                          <span className="flex items-center gap-1 text-amber-600 dark:text-amber-500"><CreditCard className="w-3 h-3" /> Ksh {service.depositAmount} deposit</span>
                         </div>
                       </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold">Ksh {service.price.toLocaleString()}</span>
+                      </div>
                     </div>
-                  ))}
-                </RadioGroup>
-              )}
+                  </div>
+                );
+
+                return (
+                  <RadioGroup
+                    value={selectedServiceId?.toString()}
+                    onValueChange={(val) => setSelectedServiceId(parseInt(val))}
+                    className="space-y-4"
+                  >
+                    {hasCategories ? keys.map(key => {
+                      const list = key === "__uncategorised__" ? uncategorised : grouped[key];
+                      const label = key === "__uncategorised__" ? "Other" : key;
+                      return (
+                        <div key={key}>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">{label}</p>
+                          <div className="space-y-2">
+                            {list.map(s => <ServiceCard key={s.id} service={s} />)}
+                          </div>
+                        </div>
+                      );
+                    }) : active.map(s => <ServiceCard key={s.id} service={s} />)}
+                  </RadioGroup>
+                );
+              })()}
             </div>
           )}
 
@@ -365,25 +501,32 @@ export default function PublicBooking() {
               <div>
                 <Label className="text-base font-semibold mb-3 block">Select Date</Label>
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                  {availableDates.map((date, i) => {
+                  {availableDates.map(({ date, isClosed }, i) => {
                     const isSelected = selectedDate && isSameDay(date, selectedDate);
                     return (
                       <button
                         key={i}
                         type="button"
+                        disabled={isClosed}
                         onClick={() => {
-                          setSelectedDate(date);
-                          setSelectedTime(null); // Reset time when date changes
+                          if (!isClosed) {
+                            setSelectedDate(date);
+                            setSelectedTime(null);
+                          }
                         }}
                         className={`flex flex-col items-center justify-center p-3 rounded-xl min-w-[70px] snap-start transition-all border-2 ${
-                          isSelected 
-                            ? 'bg-primary text-primary-foreground border-primary shadow-md' 
-                            : 'bg-muted border-transparent hover:bg-muted/80'
+                          isClosed
+                            ? 'bg-muted/40 border-transparent opacity-40 cursor-not-allowed'
+                            : isSelected
+                              ? 'bg-primary text-primary-foreground border-primary shadow-md'
+                              : 'bg-muted border-transparent hover:bg-muted/80'
                         }`}
                       >
                         <span className="text-xs uppercase font-medium opacity-80">{format(date, "EEE")}</span>
                         <span className="text-xl font-bold mt-1">{format(date, "d")}</span>
-                        <span className="text-[10px] opacity-80 mt-1">{format(date, "MMM")}</span>
+                        <span className={`text-[10px] mt-1 ${isClosed ? "font-semibold" : "opacity-80"}`}>
+                          {isClosed ? "Closed" : format(date, "MMM")}
+                        </span>
                       </button>
                     );
                   })}
@@ -402,15 +545,20 @@ export default function PublicBooking() {
                       {availableTimeSlots.map((time, i) => {
                         const timeStr = time.toISOString();
                         const isSelected = selectedTime === timeStr;
+                        const isBlocked = blockedSlotTimes.has(timeStr);
                         return (
                           <button
                             key={i}
                             type="button"
-                            onClick={() => setSelectedTime(timeStr)}
+                            disabled={isBlocked}
+                            onClick={() => !isBlocked && setSelectedTime(timeStr)}
+                            title={isBlocked ? "Stylist already booked at this time" : undefined}
                             className={`py-3 rounded-lg text-sm font-medium transition-all border-2 ${
-                              isSelected 
-                                ? 'bg-primary text-primary-foreground border-primary shadow-md' 
-                                : 'bg-muted border-transparent hover:bg-muted/80'
+                              isBlocked
+                                ? 'bg-muted/40 border-transparent text-muted-foreground/40 cursor-not-allowed line-through'
+                                : isSelected 
+                                  ? 'bg-primary text-primary-foreground border-primary shadow-md' 
+                                  : 'bg-muted border-transparent hover:bg-muted/80'
                             }`}
                           >
                             {format(time, "h:mm a")}
@@ -481,12 +629,23 @@ export default function PublicBooking() {
 
         <CardFooter className="pt-4 pb-6 px-6">
           {step === "service" && (
-            <Button 
-              className="w-full text-lg h-12" 
+            <Button
+              className="w-full text-lg h-12"
               disabled={!selectedServiceId}
-              onClick={() => setStep("datetime")}
+              onClick={() => {
+                const hasStaff = (salon.staff ?? []).filter(s => s.isActive).length > 0;
+                setStep(hasStaff ? "stylist" : "datetime");
+              }}
             >
               Continue
+            </Button>
+          )}
+          {step === "stylist" && (
+            <Button
+              className="w-full text-lg h-12"
+              onClick={() => setStep("datetime")}
+            >
+              {selectedStaffId ? "Continue" : "Continue — Any available"}
             </Button>
           )}
           {step === "datetime" && (
@@ -498,7 +657,7 @@ export default function PublicBooking() {
               Continue to Details
             </Button>
           )}
-          {step === "details" && (
+          {step === "details" && !conflictSlot && (
             <Button 
               className="w-full text-lg h-12" 
               type="submit" 
@@ -507,6 +666,58 @@ export default function PublicBooking() {
             >
               {createBooking.isPending ? 'Processing...' : 'Confirm & Pay Deposit'}
             </Button>
+          )}
+          {step === "details" && conflictSlot && (
+            <div className="w-full space-y-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300">
+                <p className="font-semibold mb-1">This time slot is already taken</p>
+                <p>{conflictSlot.staffName ? `${conflictSlot.staffName} is` : "The stylist is"} already booked at {format(new Date(conflictSlot.appointmentAt), "h:mm a")}. Choose a different time or join the waitlist.</p>
+              </div>
+              {!waitlistJoined ? (
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="w-full h-11"
+                    variant="outline"
+                    disabled={addToWaitlist.isPending || !formData.name || !formData.phone}
+                    onClick={() => {
+                      if (!salon || !formData.name || !formData.phone) return;
+                      addToWaitlist.mutate(
+                        {
+                          salonId: salon.id,
+                          data: {
+                            staffId: conflictSlot.staffId ?? undefined,
+                            serviceId: conflictSlot.serviceId,
+                            appointmentAt: conflictSlot.appointmentAt,
+                            clientName: formData.name,
+                            clientPhone: formData.phone,
+                            serviceName: conflictSlot.serviceName,
+                            staffName: conflictSlot.staffName ?? undefined,
+                          },
+                        },
+                        { onSuccess: () => setWaitlistJoined(true) }
+                      );
+                    }}
+                  >
+                    {addToWaitlist.isPending ? "Joining…" : "⏳ Join Waitlist for This Slot"}
+                  </Button>
+                  <Button
+                    className="w-full h-11"
+                    variant="ghost"
+                    onClick={() => { setConflictSlot(null); setSelectedTime(null); }}
+                  >
+                    ← Choose a Different Time
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 text-center space-y-1">
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-400">You're on the waitlist!</p>
+                  <p className="text-sm text-emerald-600 dark:text-emerald-500">We'll reach out to <strong>{formData.phone}</strong> if this slot opens up.</p>
+                  <Button className="mt-2 w-full" variant="outline" onClick={() => { setConflictSlot(null); setWaitlistJoined(false); setSelectedTime(null); }}>
+                    Choose a Different Time
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
         </CardFooter>
       </Card>

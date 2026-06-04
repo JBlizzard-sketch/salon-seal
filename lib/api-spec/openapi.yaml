@@ -275,6 +275,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/StaffMember"
 
+  /salons/{salonId}/staff/performance:
+    get:
+      operationId: getStaffPerformance
+      tags: [staff]
+      summary: Get performance stats for all staff in a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [week, month, 3months, 6months, all]
+      responses:
+        "200":
+          description: Staff performance stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetStaffPerformanceResponse"
+
   /salons/{salonId}/staff/{id}:
     patch:
       operationId: updateStaffMember
@@ -328,7 +352,7 @@ paths:
     get:
       operationId: listBookings
       tags: [bookings]
-      summary: List bookings (filterable by salonId and status)
+      summary: List bookings (filterable by salonId, status, staffId)
       parameters:
         - name: salonId
           in: query
@@ -345,6 +369,11 @@ paths:
           required: false
           schema:
             type: string
+        - name: staffId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
           description: List of bookings
@@ -366,11 +395,11 @@ paths:
               $ref: "#/components/schemas/CreateBookingBody"
       responses:
         "201":
-          description: Created booking
+          description: Created booking(s)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Booking"
+                $ref: "#/components/schemas/CreateBookingResponse"
 
   /bookings/{id}:
     get:
@@ -412,11 +441,11 @@ paths:
               $ref: "#/components/schemas/UpdateBookingStatusBody"
       responses:
         "200":
-          description: Updated booking
+          description: Updated booking with auto-blacklist info
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Booking"
+                $ref: "#/components/schemas/UpdateBookingStatusResponse"
 
   /bookings/{id}/simulate-payment:
     post:
@@ -488,6 +517,147 @@ paths:
           description: Deposit already paid or booking in invalid state
         "404":
           description: Not found
+
+  /bookings/{id}/staff:
+    patch:
+      operationId: assignBookingStaff
+      tags: [bookings]
+      summary: Assign or reassign a staff member to a booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignBookingStaffBody"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+
+  /bookings/{id}/reschedule:
+    patch:
+      operationId: rescheduleBooking
+      tags: [bookings]
+      summary: Reschedule a booking to a new date/time
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RescheduleBookingBody"
+      responses:
+        "200":
+          description: Rescheduled booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+
+  # ── Waitlist ─────────────────────────────────────────────────────────────────
+  /salons/{salonId}/waitlist:
+    get:
+      operationId: getWaitlist
+      tags: [waitlist]
+      summary: List all waitlist entries for a salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Waitlist entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitlistListResponse"
+    post:
+      operationId: addToWaitlist
+      tags: [waitlist]
+      summary: Add a client to the waitlist for a specific slot
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddToWaitlistBody"
+      responses:
+        "201":
+          description: Added to waitlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitlistEntry"
+
+  /salons/{salonId}/waitlist/{id}:
+    delete:
+      operationId: removeFromWaitlist
+      tags: [waitlist]
+      summary: Remove a waitlist entry (dismiss after notifying)
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
+  /salons/{salonId}/waitlist/{id}/notify:
+    patch:
+      operationId: markWaitlistNotified
+      tags: [waitlist]
+      summary: Mark a waitlist entry as notified
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitlistEntry"
 
   # ── Reminders ──────────────────────────────────────────────────────────────────
   /bookings/{id}/send-reminder:
@@ -606,6 +776,159 @@ paths:
                 $ref: "#/components/schemas/ClientDetail"
         "404":
           description: Not found
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update a client's notes or other editable fields
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientBody"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDetail"
+        "404":
+          description: Not found
+
+  /salons/{salonId}/staff/{staffId}/blocks:
+    get:
+      operationId: listStaffBlocks
+      tags: [staff]
+      summary: List time-off blocks for a staff member
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Staff blocks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStaffBlocksResponse"
+    post:
+      operationId: createStaffBlock
+      tags: [staff]
+      summary: Create a time-off block for a staff member
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffBlockBody"
+      responses:
+        "201":
+          description: Created block
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateStaffBlockResponse"
+
+  /salons/{salonId}/staff/{staffId}/blocks/{blockId}:
+    delete:
+      operationId: deleteStaffBlock
+      tags: [staff]
+      summary: Delete a time-off block
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: blockId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+
+  /salons/{salonId}/staff/{staffId}/busy-slots:
+    get:
+      operationId: getStaffBusySlots
+      tags: [staff]
+      summary: Get booked appointment times for a staff member on a given date
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of busy time slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffBusySlotsResponse"
 
   /salons/{salonId}/clients/{id}/blacklist:
     patch:
@@ -670,6 +993,12 @@ paths:
           required: true
           schema:
             type: integer
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [week, month, 3months, 6months, all]
       responses:
         "200":
           description: Analytics data
@@ -714,6 +1043,46 @@ components:
       required:
         - status
 
+    BusinessDayHours:
+      type: object
+      properties:
+        isOpen:
+          type: boolean
+        openTime:
+          type: string
+        closeTime:
+          type: string
+      required:
+        - isOpen
+        - openTime
+        - closeTime
+
+    BusinessHours:
+      type: object
+      properties:
+        monday:
+          $ref: "#/components/schemas/BusinessDayHours"
+        tuesday:
+          $ref: "#/components/schemas/BusinessDayHours"
+        wednesday:
+          $ref: "#/components/schemas/BusinessDayHours"
+        thursday:
+          $ref: "#/components/schemas/BusinessDayHours"
+        friday:
+          $ref: "#/components/schemas/BusinessDayHours"
+        saturday:
+          $ref: "#/components/schemas/BusinessDayHours"
+        sunday:
+          $ref: "#/components/schemas/BusinessDayHours"
+      required:
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+        - sunday
+
     Salon:
       type: object
       properties:
@@ -733,6 +1102,12 @@ components:
           type: integer
         platformFeePercent:
           type: number
+        monthlyRevenueGoal:
+          type: ["integer", "null"]
+        autoBlacklistThreshold:
+          type: ["integer", "null"]
+        businessHours:
+          $ref: "#/components/schemas/BusinessHours"
         isActive:
           type: boolean
         createdAt:
@@ -746,6 +1121,9 @@ components:
         - location
         - cancellationWindowHours
         - platformFeePercent
+        - monthlyRevenueGoal
+        - autoBlacklistThreshold
+        - businessHours
         - isActive
         - createdAt
 
@@ -766,6 +1144,8 @@ components:
           type: string
         cancellationWindowHours:
           type: integer
+        businessHours:
+          $ref: "#/components/schemas/BusinessHours"
         services:
           type: array
           items:
@@ -781,6 +1161,7 @@ components:
         - phone
         - location
         - cancellationWindowHours
+        - businessHours
         - services
         - staff
 
@@ -819,6 +1200,12 @@ components:
           type: ["string", "null"]
         cancellationWindowHours:
           type: ["integer", "null"]
+        monthlyRevenueGoal:
+          type: ["integer", "null"]
+        autoBlacklistThreshold:
+          type: ["integer", "null"]
+        businessHours:
+          $ref: "#/components/schemas/BusinessHours"
         isActive:
           type: ["boolean", "null"]
 
@@ -833,6 +1220,8 @@ components:
           type: string
         description:
           type: ["string", "null"]
+        category:
+          type: ["string", "null"]
         price:
           type: integer
         depositAmount:
@@ -845,6 +1234,7 @@ components:
         - id
         - salonId
         - name
+        - category
         - price
         - depositAmount
         - durationMinutes
@@ -856,6 +1246,8 @@ components:
         name:
           type: string
         description:
+          type: ["string", "null"]
+        category:
           type: ["string", "null"]
         price:
           type: integer
@@ -875,6 +1267,8 @@ components:
         name:
           type: ["string", "null"]
         description:
+          type: ["string", "null"]
+        category:
           type: ["string", "null"]
         price:
           type: ["integer", "null"]
@@ -906,6 +1300,54 @@ components:
         - name
         - role
         - isActive
+
+    StaffPerformanceEntry:
+      type: object
+      properties:
+        staffId:
+          type: integer
+        staffName:
+          type: string
+        role:
+          type: string
+        isActive:
+          type: boolean
+        completedBookings:
+          type: integer
+        totalRevenue:
+          type: integer
+        noShowCount:
+          type: integer
+        noShowRate:
+          type: number
+        avgBookingValue:
+          type: number
+        totalBookings:
+          type: integer
+      required:
+        - staffId
+        - staffName
+        - role
+        - isActive
+        - completedBookings
+        - totalRevenue
+        - noShowCount
+        - noShowRate
+        - avgBookingValue
+        - totalBookings
+
+    GetStaffPerformanceResponse:
+      type: object
+      properties:
+        period:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffPerformanceEntry"
+      required:
+        - period
+        - entries
 
     CreateStaffMemberBody:
       type: object
@@ -959,6 +1401,8 @@ components:
           type: integer
         depositPaid:
           type: boolean
+        depositWaived:
+          type: boolean
         mpesaRef:
           type: ["string", "null"]
         refundEligible:
@@ -971,6 +1415,10 @@ components:
           type: ["string", "null"]
         durationMinutes:
           type: ["integer", "null"]
+        recurringGroupId:
+          type: ["integer", "null"]
+        recurrenceRule:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -985,6 +1433,7 @@ components:
         - status
         - depositAmount
         - depositPaid
+        - depositWaived
         - refundEligible
         - serviceName
         - createdAt
@@ -1007,12 +1456,40 @@ components:
           format: date-time
         notes:
           type: ["string", "null"]
+        depositWaived:
+          type: boolean
+        recurrenceRule:
+          type: string
+          enum: [weekly, biweekly, monthly]
+        recurrenceCount:
+          type: integer
       required:
         - salonId
         - serviceId
         - clientName
         - clientPhone
         - appointmentAt
+
+    CreateBookingResponse:
+      type: object
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+        additionalBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Booking"
+      required:
+        - booking
+        - additionalBookings
+
+    AssignBookingStaffBody:
+      type: object
+      properties:
+        staffId:
+          type: ["integer", "null"]
+      required:
+        - staffId
 
     UpdateBookingStatusBody:
       type: object
@@ -1022,6 +1499,20 @@ components:
           enum: [arrived, completed, no_show, cancelled]
       required:
         - status
+
+    UpdateBookingStatusResponse:
+      type: object
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+        autoBlacklisted:
+          type: boolean
+        autoBlacklistedName:
+          type: ["string", "null"]
+      required:
+        - booking
+        - autoBlacklisted
+        - autoBlacklistedName
 
     CancelBookingBody:
       type: object
@@ -1041,11 +1532,25 @@ components:
           type: integer
         message:
           type: string
+        waitlistedClients:
+          type: array
+          items:
+            $ref: "#/components/schemas/WaitlistEntry"
+        autoPromoted:
+          type: boolean
+        autoPromotedClientName:
+          type: ["string", "null"]
+        autoPromotedPhone:
+          type: ["string", "null"]
+        autoPromotedMessage:
+          type: ["string", "null"]
       required:
         - booking
         - refundEligible
         - refundAmount
         - message
+        - waitlistedClients
+        - autoPromoted
 
     Client:
       type: object
@@ -1066,6 +1571,8 @@ components:
           type: integer
         isBlacklisted:
           type: boolean
+        isVip:
+          type: boolean
         lastVisitAt:
           type: ["string", "null"]
           format: date-time
@@ -1081,6 +1588,7 @@ components:
         - noShowCount
         - totalSpent
         - isBlacklisted
+        - isVip
         - createdAt
 
     ClientDetail:
@@ -1102,6 +1610,10 @@ components:
           type: integer
         isBlacklisted:
           type: boolean
+        isVip:
+          type: boolean
+        notes:
+          type: ["string", "null"]
         lastVisitAt:
           type: ["string", "null"]
           format: date-time
@@ -1121,8 +1633,183 @@ components:
         - noShowCount
         - totalSpent
         - isBlacklisted
+        - isVip
+        - notes
         - createdAt
         - recentBookings
+
+    UpdateClientBody:
+      type: object
+      properties:
+        notes:
+          type: ["string", "null"]
+        isVip:
+          type: boolean
+      required: []
+
+    RescheduleBookingBody:
+      type: object
+      properties:
+        appointmentAt:
+          type: string
+          format: date-time
+      required:
+        - appointmentAt
+
+    StaffBusySlot:
+      type: object
+      properties:
+        appointmentAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+      required:
+        - appointmentAt
+        - durationMinutes
+
+    StaffBusySlotsResponse:
+      type: object
+      properties:
+        busySlots:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffBusySlot"
+      required:
+        - busySlots
+
+    StaffBlock:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        staffId:
+          type: integer
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        reason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - salonId
+        - staffId
+        - startAt
+        - endAt
+        - createdAt
+
+    CreateStaffBlockBody:
+      type: object
+      properties:
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        reason:
+          type: ["string", "null"]
+      required:
+        - startAt
+        - endAt
+
+    ListStaffBlocksResponse:
+      type: object
+      properties:
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffBlock"
+      required:
+        - blocks
+
+    CreateStaffBlockResponse:
+      type: object
+      properties:
+        block:
+          $ref: "#/components/schemas/StaffBlock"
+      required:
+        - block
+
+    WaitlistEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        salonId:
+          type: integer
+        staffId:
+          type: ["integer", "null"]
+        serviceId:
+          type: ["integer", "null"]
+        appointmentAt:
+          type: string
+          format: date-time
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        serviceName:
+          type: string
+        staffName:
+          type: ["string", "null"]
+        notified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - salonId
+        - appointmentAt
+        - clientName
+        - clientPhone
+        - serviceName
+        - notified
+        - createdAt
+
+    WaitlistListResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/WaitlistEntry"
+      required:
+        - entries
+
+    AddToWaitlistBody:
+      type: object
+      properties:
+        staffId:
+          type: integer
+        serviceId:
+          type: integer
+        appointmentAt:
+          type: string
+          format: date-time
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        serviceName:
+          type: string
+        staffName:
+          type: string
+      required:
+        - serviceId
+        - appointmentAt
+        - clientName
+        - clientPhone
+        - serviceName
 
     SetBlacklistBody:
       type: object
@@ -1149,6 +1836,8 @@ components:
           type: integer
         noShowsToday:
           type: integer
+        monthRevenue:
+          type: integer
         upcomingBookings:
           type: array
           items:
@@ -1161,11 +1850,14 @@ components:
         - pendingBookings
         - completedToday
         - noShowsToday
+        - monthRevenue
         - upcomingBookings
 
     SalonAnalytics:
       type: object
       properties:
+        summary:
+          $ref: "#/components/schemas/AnalyticsSummary"
         peakDays:
           type: array
           items:
@@ -1178,15 +1870,72 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WeeklyTrendPoint"
+        monthlyRevenue:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyRevenuePoint"
         staffPerformance:
           type: array
           items:
             $ref: "#/components/schemas/StaffPerformance"
+        peakHours:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourCount"
       required:
+        - summary
         - peakDays
         - popularServices
         - weeklyTrend
+        - monthlyRevenue
         - staffPerformance
+        - peakHours
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalRevenue:
+          type: integer
+        depositCollected:
+          type: integer
+        totalBookings:
+          type: integer
+        completedBookings:
+          type: integer
+        noShowBookings:
+          type: integer
+        completionRate:
+          type: number
+        noShowRate:
+          type: number
+        depositCollectionRate:
+          type: number
+      required:
+        - totalRevenue
+        - depositCollected
+        - totalBookings
+        - completedBookings
+        - noShowBookings
+        - completionRate
+        - noShowRate
+        - depositCollectionRate
+
+    MonthlyRevenuePoint:
+      type: object
+      properties:
+        month:
+          type: string
+        bookings:
+          type: integer
+        revenue:
+          type: integer
+        noShows:
+          type: integer
+      required:
+        - month
+        - bookings
+        - revenue
+        - noShows
 
     DayCount:
       type: object
@@ -1197,6 +1946,20 @@ components:
           type: integer
       required:
         - day
+        - count
+
+    HourCount:
+      type: object
+      properties:
+        hour:
+          type: integer
+        label:
+          type: string
+        count:
+          type: integer
+      required:
+        - hour
+        - label
         - count
 
     ServiceCount:

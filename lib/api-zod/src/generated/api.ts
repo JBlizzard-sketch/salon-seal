@@ -26,6 +26,45 @@ export const ListSalonsResponseItem = zod.object({
   location: zod.string(),
   cancellationWindowHours: zod.number(),
   platformFeePercent: zod.number(),
+  monthlyRevenueGoal: zod.number().nullable(),
+  autoBlacklistThreshold: zod.number().nullable(),
+  businessHours: zod.object({
+    monday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    tuesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    wednesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    thursday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    friday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    saturday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    sunday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+  }),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -59,6 +98,45 @@ export const GetSalonResponse = zod.object({
   location: zod.string(),
   cancellationWindowHours: zod.number(),
   platformFeePercent: zod.number(),
+  monthlyRevenueGoal: zod.number().nullable(),
+  autoBlacklistThreshold: zod.number().nullable(),
+  businessHours: zod.object({
+    monday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    tuesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    wednesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    thursday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    friday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    saturday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    sunday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+  }),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -76,6 +154,47 @@ export const UpdateSalonBody = zod.object({
   phone: zod.string().nullish(),
   location: zod.string().nullish(),
   cancellationWindowHours: zod.number().nullish(),
+  monthlyRevenueGoal: zod.number().nullish(),
+  autoBlacklistThreshold: zod.number().nullish(),
+  businessHours: zod
+    .object({
+      monday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+      tuesday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+      wednesday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+      thursday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+      friday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+      saturday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+      sunday: zod.object({
+        isOpen: zod.boolean(),
+        openTime: zod.string(),
+        closeTime: zod.string(),
+      }),
+    })
+    .optional(),
   isActive: zod.boolean().nullish(),
 });
 
@@ -88,6 +207,45 @@ export const UpdateSalonResponse = zod.object({
   location: zod.string(),
   cancellationWindowHours: zod.number(),
   platformFeePercent: zod.number(),
+  monthlyRevenueGoal: zod.number().nullable(),
+  autoBlacklistThreshold: zod.number().nullable(),
+  businessHours: zod.object({
+    monday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    tuesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    wednesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    thursday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    friday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    saturday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    sunday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+  }),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -107,12 +265,50 @@ export const GetSalonBySlugResponse = zod.object({
   phone: zod.string(),
   location: zod.string(),
   cancellationWindowHours: zod.number(),
+  businessHours: zod.object({
+    monday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    tuesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    wednesday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    thursday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    friday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    saturday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+    sunday: zod.object({
+      isOpen: zod.boolean(),
+      openTime: zod.string(),
+      closeTime: zod.string(),
+    }),
+  }),
   services: zod.array(
     zod.object({
       id: zod.number(),
       salonId: zod.number(),
       name: zod.string(),
       description: zod.string().nullish(),
+      category: zod.string().nullable(),
       price: zod.number(),
       depositAmount: zod.number(),
       durationMinutes: zod.number(),
@@ -143,6 +339,7 @@ export const ListServicesResponseItem = zod.object({
   salonId: zod.number(),
   name: zod.string(),
   description: zod.string().nullish(),
+  category: zod.string().nullable(),
   price: zod.number(),
   depositAmount: zod.number(),
   durationMinutes: zod.number(),
@@ -160,6 +357,7 @@ export const CreateServiceParams = zod.object({
 export const CreateServiceBody = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
+  category: zod.string().nullish(),
   price: zod.number(),
   depositAmount: zod.number(),
   durationMinutes: zod.number(),
@@ -176,6 +374,7 @@ export const UpdateServiceParams = zod.object({
 export const UpdateServiceBody = zod.object({
   name: zod.string().nullish(),
   description: zod.string().nullish(),
+  category: zod.string().nullish(),
   price: zod.number().nullish(),
   depositAmount: zod.number().nullish(),
   durationMinutes: zod.number().nullish(),
@@ -187,6 +386,7 @@ export const UpdateServiceResponse = zod.object({
   salonId: zod.number(),
   name: zod.string(),
   description: zod.string().nullish(),
+  category: zod.string().nullable(),
   price: zod.number(),
   depositAmount: zod.number(),
   durationMinutes: zod.number(),
@@ -232,6 +432,35 @@ export const CreateStaffMemberBody = zod.object({
 });
 
 /**
+ * @summary Get performance stats for all staff in a salon
+ */
+export const GetStaffPerformanceParams = zod.object({
+  salonId: zod.coerce.number(),
+});
+
+export const GetStaffPerformanceQueryParams = zod.object({
+  period: zod.enum(["week", "month", "3months", "6months", "all"]).optional(),
+});
+
+export const GetStaffPerformanceResponse = zod.object({
+  period: zod.string(),
+  entries: zod.array(
+    zod.object({
+      staffId: zod.number(),
+      staffName: zod.string(),
+      role: zod.string(),
+      isActive: zod.boolean(),
+      completedBookings: zod.number(),
+      totalRevenue: zod.number(),
+      noShowCount: zod.number(),
+      noShowRate: zod.number(),
+      avgBookingValue: zod.number(),
+      totalBookings: zod.number(),
+    }),
+  ),
+});
+
+/**
  * @summary Update staff member
  */
 export const UpdateStaffMemberParams = zod.object({
@@ -264,12 +493,13 @@ export const DeleteStaffMemberParams = zod.object({
 });
 
 /**
- * @summary List bookings (filterable by salonId and status)
+ * @summary List bookings (filterable by salonId, status, staffId)
  */
 export const ListBookingsQueryParams = zod.object({
   salonId: zod.coerce.number().optional(),
   status: zod.coerce.string().optional(),
   date: zod.coerce.string().optional(),
+  staffId: zod.coerce.number().optional(),
 });
 
 export const ListBookingsResponseItem = zod.object({
@@ -291,12 +521,15 @@ export const ListBookingsResponseItem = zod.object({
   ]),
   depositAmount: zod.number(),
   depositPaid: zod.boolean(),
+  depositWaived: zod.boolean(),
   mpesaRef: zod.string().nullish(),
   refundEligible: zod.boolean(),
   notes: zod.string().nullish(),
   serviceName: zod.string(),
   staffName: zod.string().nullish(),
   durationMinutes: zod.number().nullish(),
+  recurringGroupId: zod.number().nullish(),
+  recurrenceRule: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListBookingsResponse = zod.array(ListBookingsResponseItem);
@@ -312,6 +545,9 @@ export const CreateBookingBody = zod.object({
   clientPhone: zod.string(),
   appointmentAt: zod.coerce.date(),
   notes: zod.string().nullish(),
+  depositWaived: zod.boolean().optional(),
+  recurrenceRule: zod.enum(["weekly", "biweekly", "monthly"]).optional(),
+  recurrenceCount: zod.number().optional(),
 });
 
 /**
@@ -340,12 +576,15 @@ export const GetBookingResponse = zod.object({
   ]),
   depositAmount: zod.number(),
   depositPaid: zod.boolean(),
+  depositWaived: zod.boolean(),
   mpesaRef: zod.string().nullish(),
   refundEligible: zod.boolean(),
   notes: zod.string().nullish(),
   serviceName: zod.string(),
   staffName: zod.string().nullish(),
   durationMinutes: zod.number().nullish(),
+  recurringGroupId: zod.number().nullish(),
+  recurrenceRule: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -361,31 +600,38 @@ export const UpdateBookingStatusBody = zod.object({
 });
 
 export const UpdateBookingStatusResponse = zod.object({
-  id: zod.number(),
-  salonId: zod.number(),
-  serviceId: zod.number(),
-  staffId: zod.number().nullish(),
-  clientId: zod.number(),
-  clientName: zod.string(),
-  clientPhone: zod.string(),
-  appointmentAt: zod.coerce.date(),
-  status: zod.enum([
-    "pending",
-    "confirmed",
-    "arrived",
-    "completed",
-    "cancelled",
-    "no_show",
-  ]),
-  depositAmount: zod.number(),
-  depositPaid: zod.boolean(),
-  mpesaRef: zod.string().nullish(),
-  refundEligible: zod.boolean(),
-  notes: zod.string().nullish(),
-  serviceName: zod.string(),
-  staffName: zod.string().nullish(),
-  durationMinutes: zod.number().nullish(),
-  createdAt: zod.coerce.date(),
+  booking: zod.object({
+    id: zod.number(),
+    salonId: zod.number(),
+    serviceId: zod.number(),
+    staffId: zod.number().nullish(),
+    clientId: zod.number(),
+    clientName: zod.string(),
+    clientPhone: zod.string(),
+    appointmentAt: zod.coerce.date(),
+    status: zod.enum([
+      "pending",
+      "confirmed",
+      "arrived",
+      "completed",
+      "cancelled",
+      "no_show",
+    ]),
+    depositAmount: zod.number(),
+    depositPaid: zod.boolean(),
+    depositWaived: zod.boolean(),
+    mpesaRef: zod.string().nullish(),
+    refundEligible: zod.boolean(),
+    notes: zod.string().nullish(),
+    serviceName: zod.string(),
+    staffName: zod.string().nullish(),
+    durationMinutes: zod.number().nullish(),
+    recurringGroupId: zod.number().nullish(),
+    recurrenceRule: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+  }),
+  autoBlacklisted: zod.boolean(),
+  autoBlacklistedName: zod.string().nullable(),
 });
 
 /**
@@ -415,12 +661,15 @@ export const SimulateMpesaPaymentResponse = zod.object({
     ]),
     depositAmount: zod.number(),
     depositPaid: zod.boolean(),
+    depositWaived: zod.boolean(),
     mpesaRef: zod.string().nullish(),
     refundEligible: zod.boolean(),
     notes: zod.string().nullish(),
     serviceName: zod.string(),
     staffName: zod.string().nullish(),
     durationMinutes: zod.number().nullish(),
+    recurringGroupId: zod.number().nullish(),
+    recurrenceRule: zod.string().nullish(),
     createdAt: zod.coerce.date(),
   }),
   mpesaRef: zod.string(),
@@ -458,17 +707,39 @@ export const CancelBookingResponse = zod.object({
     ]),
     depositAmount: zod.number(),
     depositPaid: zod.boolean(),
+    depositWaived: zod.boolean(),
     mpesaRef: zod.string().nullish(),
     refundEligible: zod.boolean(),
     notes: zod.string().nullish(),
     serviceName: zod.string(),
     staffName: zod.string().nullish(),
     durationMinutes: zod.number().nullish(),
+    recurringGroupId: zod.number().nullish(),
+    recurrenceRule: zod.string().nullish(),
     createdAt: zod.coerce.date(),
   }),
   refundEligible: zod.boolean(),
   refundAmount: zod.number(),
   message: zod.string(),
+  waitlistedClients: zod.array(
+    zod.object({
+      id: zod.number(),
+      salonId: zod.number(),
+      staffId: zod.number().nullish(),
+      serviceId: zod.number().nullish(),
+      appointmentAt: zod.coerce.date(),
+      clientName: zod.string(),
+      clientPhone: zod.string(),
+      serviceName: zod.string(),
+      staffName: zod.string().nullish(),
+      notified: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  autoPromoted: zod.boolean(),
+  autoPromotedClientName: zod.string().nullish(),
+  autoPromotedPhone: zod.string().nullish(),
+  autoPromotedMessage: zod.string().nullish(),
 });
 
 /**
@@ -481,6 +752,162 @@ export const SendDepositNudgeParams = zod.object({
 export const SendDepositNudgeResponse = zod.object({
   message: zod.string(),
   waMessageId: zod.string(),
+});
+
+/**
+ * @summary Assign or reassign a staff member to a booking
+ */
+export const AssignBookingStaffParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AssignBookingStaffBody = zod.object({
+  staffId: zod.number().nullable(),
+});
+
+export const AssignBookingStaffResponse = zod.object({
+  id: zod.number(),
+  salonId: zod.number(),
+  serviceId: zod.number(),
+  staffId: zod.number().nullish(),
+  clientId: zod.number(),
+  clientName: zod.string(),
+  clientPhone: zod.string(),
+  appointmentAt: zod.coerce.date(),
+  status: zod.enum([
+    "pending",
+    "confirmed",
+    "arrived",
+    "completed",
+    "cancelled",
+    "no_show",
+  ]),
+  depositAmount: zod.number(),
+  depositPaid: zod.boolean(),
+  depositWaived: zod.boolean(),
+  mpesaRef: zod.string().nullish(),
+  refundEligible: zod.boolean(),
+  notes: zod.string().nullish(),
+  serviceName: zod.string(),
+  staffName: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  recurringGroupId: zod.number().nullish(),
+  recurrenceRule: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reschedule a booking to a new date/time
+ */
+export const RescheduleBookingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RescheduleBookingBody = zod.object({
+  appointmentAt: zod.coerce.date(),
+});
+
+export const RescheduleBookingResponse = zod.object({
+  id: zod.number(),
+  salonId: zod.number(),
+  serviceId: zod.number(),
+  staffId: zod.number().nullish(),
+  clientId: zod.number(),
+  clientName: zod.string(),
+  clientPhone: zod.string(),
+  appointmentAt: zod.coerce.date(),
+  status: zod.enum([
+    "pending",
+    "confirmed",
+    "arrived",
+    "completed",
+    "cancelled",
+    "no_show",
+  ]),
+  depositAmount: zod.number(),
+  depositPaid: zod.boolean(),
+  depositWaived: zod.boolean(),
+  mpesaRef: zod.string().nullish(),
+  refundEligible: zod.boolean(),
+  notes: zod.string().nullish(),
+  serviceName: zod.string(),
+  staffName: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  recurringGroupId: zod.number().nullish(),
+  recurrenceRule: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List all waitlist entries for a salon
+ */
+export const GetWaitlistParams = zod.object({
+  salonId: zod.coerce.number(),
+});
+
+export const GetWaitlistResponse = zod.object({
+  entries: zod.array(
+    zod.object({
+      id: zod.number(),
+      salonId: zod.number(),
+      staffId: zod.number().nullish(),
+      serviceId: zod.number().nullish(),
+      appointmentAt: zod.coerce.date(),
+      clientName: zod.string(),
+      clientPhone: zod.string(),
+      serviceName: zod.string(),
+      staffName: zod.string().nullish(),
+      notified: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add a client to the waitlist for a specific slot
+ */
+export const AddToWaitlistParams = zod.object({
+  salonId: zod.coerce.number(),
+});
+
+export const AddToWaitlistBody = zod.object({
+  staffId: zod.number().optional(),
+  serviceId: zod.number(),
+  appointmentAt: zod.coerce.date(),
+  clientName: zod.string(),
+  clientPhone: zod.string(),
+  serviceName: zod.string(),
+  staffName: zod.string().optional(),
+});
+
+/**
+ * @summary Remove a waitlist entry (dismiss after notifying)
+ */
+export const RemoveFromWaitlistParams = zod.object({
+  salonId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Mark a waitlist entry as notified
+ */
+export const MarkWaitlistNotifiedParams = zod.object({
+  salonId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const MarkWaitlistNotifiedResponse = zod.object({
+  id: zod.number(),
+  salonId: zod.number(),
+  staffId: zod.number().nullish(),
+  serviceId: zod.number().nullish(),
+  appointmentAt: zod.coerce.date(),
+  clientName: zod.string(),
+  clientPhone: zod.string(),
+  serviceName: zod.string(),
+  staffName: zod.string().nullish(),
+  notified: zod.boolean(),
+  createdAt: zod.coerce.date(),
 });
 
 /**
@@ -583,6 +1010,7 @@ export const ListClientsResponseItem = zod.object({
   noShowCount: zod.number(),
   totalSpent: zod.number(),
   isBlacklisted: zod.boolean(),
+  isVip: zod.boolean(),
   lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
@@ -605,6 +1033,8 @@ export const GetClientResponse = zod.object({
   noShowCount: zod.number(),
   totalSpent: zod.number(),
   isBlacklisted: zod.boolean(),
+  isVip: zod.boolean(),
+  notes: zod.string().nullable(),
   lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   recentBookings: zod.array(
@@ -627,13 +1057,151 @@ export const GetClientResponse = zod.object({
       ]),
       depositAmount: zod.number(),
       depositPaid: zod.boolean(),
+      depositWaived: zod.boolean(),
       mpesaRef: zod.string().nullish(),
       refundEligible: zod.boolean(),
       notes: zod.string().nullish(),
       serviceName: zod.string(),
       staffName: zod.string().nullish(),
       durationMinutes: zod.number().nullish(),
+      recurringGroupId: zod.number().nullish(),
+      recurrenceRule: zod.string().nullish(),
       createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Update a client's notes or other editable fields
+ */
+export const UpdateClientParams = zod.object({
+  salonId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const UpdateClientBody = zod.object({
+  notes: zod.string().nullish(),
+  isVip: zod.boolean().optional(),
+});
+
+export const UpdateClientResponse = zod.object({
+  id: zod.number(),
+  salonId: zod.number(),
+  name: zod.string(),
+  phone: zod.string(),
+  totalVisits: zod.number(),
+  noShowCount: zod.number(),
+  totalSpent: zod.number(),
+  isBlacklisted: zod.boolean(),
+  isVip: zod.boolean(),
+  notes: zod.string().nullable(),
+  lastVisitAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+  recentBookings: zod.array(
+    zod.object({
+      id: zod.number(),
+      salonId: zod.number(),
+      serviceId: zod.number(),
+      staffId: zod.number().nullish(),
+      clientId: zod.number(),
+      clientName: zod.string(),
+      clientPhone: zod.string(),
+      appointmentAt: zod.coerce.date(),
+      status: zod.enum([
+        "pending",
+        "confirmed",
+        "arrived",
+        "completed",
+        "cancelled",
+        "no_show",
+      ]),
+      depositAmount: zod.number(),
+      depositPaid: zod.boolean(),
+      depositWaived: zod.boolean(),
+      mpesaRef: zod.string().nullish(),
+      refundEligible: zod.boolean(),
+      notes: zod.string().nullish(),
+      serviceName: zod.string(),
+      staffName: zod.string().nullish(),
+      durationMinutes: zod.number().nullish(),
+      recurringGroupId: zod.number().nullish(),
+      recurrenceRule: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary List time-off blocks for a staff member
+ */
+export const ListStaffBlocksParams = zod.object({
+  salonId: zod.coerce.number(),
+  staffId: zod.coerce.number(),
+});
+
+export const ListStaffBlocksQueryParams = zod.object({
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
+});
+
+export const ListStaffBlocksResponse = zod.object({
+  blocks: zod.array(
+    zod.object({
+      id: zod.number(),
+      salonId: zod.number(),
+      staffId: zod.number(),
+      startAt: zod.coerce.date(),
+      endAt: zod.coerce.date(),
+      reason: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Create a time-off block for a staff member
+ */
+export const CreateStaffBlockParams = zod.object({
+  salonId: zod.coerce.number(),
+  staffId: zod.coerce.number(),
+});
+
+export const CreateStaffBlockBody = zod.object({
+  startAt: zod.coerce.date(),
+  endAt: zod.coerce.date(),
+  reason: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a time-off block
+ */
+export const DeleteStaffBlockParams = zod.object({
+  salonId: zod.coerce.number(),
+  staffId: zod.coerce.number(),
+  blockId: zod.coerce.number(),
+});
+
+export const DeleteStaffBlockResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Get booked appointment times for a staff member on a given date
+ */
+export const GetStaffBusySlotsParams = zod.object({
+  salonId: zod.coerce.number(),
+  staffId: zod.coerce.number(),
+});
+
+export const GetStaffBusySlotsQueryParams = zod.object({
+  date: zod.coerce.string(),
+});
+
+export const GetStaffBusySlotsResponse = zod.object({
+  busySlots: zod.array(
+    zod.object({
+      appointmentAt: zod.coerce.date(),
+      durationMinutes: zod.number(),
     }),
   ),
 });
@@ -659,6 +1227,8 @@ export const SetClientBlacklistResponse = zod.object({
   noShowCount: zod.number(),
   totalSpent: zod.number(),
   isBlacklisted: zod.boolean(),
+  isVip: zod.boolean(),
+  notes: zod.string().nullable(),
   lastVisitAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   recentBookings: zod.array(
@@ -681,12 +1251,15 @@ export const SetClientBlacklistResponse = zod.object({
       ]),
       depositAmount: zod.number(),
       depositPaid: zod.boolean(),
+      depositWaived: zod.boolean(),
       mpesaRef: zod.string().nullish(),
       refundEligible: zod.boolean(),
       notes: zod.string().nullish(),
       serviceName: zod.string(),
       staffName: zod.string().nullish(),
       durationMinutes: zod.number().nullish(),
+      recurringGroupId: zod.number().nullish(),
+      recurrenceRule: zod.string().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -707,6 +1280,7 @@ export const GetDashboardSummaryResponse = zod.object({
   pendingBookings: zod.number(),
   completedToday: zod.number(),
   noShowsToday: zod.number(),
+  monthRevenue: zod.number(),
   upcomingBookings: zod.array(
     zod.object({
       id: zod.number(),
@@ -727,12 +1301,15 @@ export const GetDashboardSummaryResponse = zod.object({
       ]),
       depositAmount: zod.number(),
       depositPaid: zod.boolean(),
+      depositWaived: zod.boolean(),
       mpesaRef: zod.string().nullish(),
       refundEligible: zod.boolean(),
       notes: zod.string().nullish(),
       serviceName: zod.string(),
       staffName: zod.string().nullish(),
       durationMinutes: zod.number().nullish(),
+      recurringGroupId: zod.number().nullish(),
+      recurrenceRule: zod.string().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -745,7 +1322,21 @@ export const GetSalonAnalyticsParams = zod.object({
   salonId: zod.coerce.number(),
 });
 
+export const GetSalonAnalyticsQueryParams = zod.object({
+  period: zod.enum(["week", "month", "3months", "6months", "all"]).optional(),
+});
+
 export const GetSalonAnalyticsResponse = zod.object({
+  summary: zod.object({
+    totalRevenue: zod.number(),
+    depositCollected: zod.number(),
+    totalBookings: zod.number(),
+    completedBookings: zod.number(),
+    noShowBookings: zod.number(),
+    completionRate: zod.number(),
+    noShowRate: zod.number(),
+    depositCollectionRate: zod.number(),
+  }),
   peakDays: zod.array(
     zod.object({
       day: zod.string(),
@@ -768,6 +1359,14 @@ export const GetSalonAnalyticsResponse = zod.object({
       noShows: zod.number(),
     }),
   ),
+  monthlyRevenue: zod.array(
+    zod.object({
+      month: zod.string(),
+      bookings: zod.number(),
+      revenue: zod.number(),
+      noShows: zod.number(),
+    }),
+  ),
   staffPerformance: zod.array(
     zod.object({
       staffId: zod.number(),
@@ -775,6 +1374,13 @@ export const GetSalonAnalyticsResponse = zod.object({
       bookings: zod.number(),
       completed: zod.number(),
       noShows: zod.number(),
+    }),
+  ),
+  peakHours: zod.array(
+    zod.object({
+      hour: zod.number(),
+      label: zod.string(),
+      count: zod.number(),
     }),
   ),
 });

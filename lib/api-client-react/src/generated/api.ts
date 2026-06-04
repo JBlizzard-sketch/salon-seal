@@ -18,22 +18,35 @@ import type {
 
 import type {
   ActivityItem,
+  AddToWaitlistBody,
+  AssignBookingStaffBody,
   Booking,
   CancelBookingBody,
   CancellationResult,
   Client,
   ClientDetail,
   CreateBookingBody,
+  CreateBookingResponse,
   CreateSalonBody,
   CreateServiceBody,
+  CreateStaffBlockBody,
+  CreateStaffBlockResponse,
   CreateStaffMemberBody,
   DashboardSummary,
+  DeleteStaffBlock200,
   DepositNudgeResponse,
   GetRecentActivityParams,
+  GetSalonAnalyticsParams,
+  GetStaffBusySlotsParams,
+  GetStaffPerformanceParams,
+  GetStaffPerformanceResponse,
   HealthStatus,
   ListBookingsParams,
+  ListStaffBlocksParams,
+  ListStaffBlocksResponse,
   ProcessRemindersResponse,
   ReminderItem,
+  RescheduleBookingBody,
   Salon,
   SalonAnalytics,
   SalonPublic,
@@ -42,11 +55,16 @@ import type {
   Service,
   SetBlacklistBody,
   SimulatePaymentResponse,
+  StaffBusySlotsResponse,
   StaffMember,
   UpdateBookingStatusBody,
+  UpdateBookingStatusResponse,
+  UpdateClientBody,
   UpdateSalonBody,
   UpdateServiceBody,
   UpdateStaffMemberBody,
+  WaitlistEntry,
+  WaitlistListResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1071,6 +1089,126 @@ export const useCreateStaffMember = <
 };
 
 /**
+ * @summary Get performance stats for all staff in a salon
+ */
+export const getGetStaffPerformanceUrl = (
+  salonId: number,
+  params?: GetStaffPerformanceParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/salons/${salonId}/staff/performance?${stringifiedParams}`
+    : `/api/salons/${salonId}/staff/performance`;
+};
+
+export const getStaffPerformance = async (
+  salonId: number,
+  params?: GetStaffPerformanceParams,
+  options?: RequestInit,
+): Promise<GetStaffPerformanceResponse> => {
+  return customFetch<GetStaffPerformanceResponse>(
+    getGetStaffPerformanceUrl(salonId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStaffPerformanceQueryKey = (
+  salonId: number,
+  params?: GetStaffPerformanceParams,
+) => {
+  return [
+    `/api/salons/${salonId}/staff/performance`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetStaffPerformanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStaffPerformance>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  params?: GetStaffPerformanceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStaffPerformance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStaffPerformanceQueryKey(salonId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStaffPerformance>>
+  > = ({ signal }) =>
+    getStaffPerformance(salonId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!salonId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStaffPerformance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStaffPerformanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStaffPerformance>>
+>;
+export type GetStaffPerformanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get performance stats for all staff in a salon
+ */
+
+export function useGetStaffPerformance<
+  TData = Awaited<ReturnType<typeof getStaffPerformance>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  params?: GetStaffPerformanceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStaffPerformance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStaffPerformanceQueryOptions(
+    salonId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Update staff member
  */
 export const getUpdateStaffMemberUrl = (salonId: number, id: number) => {
@@ -1244,7 +1382,7 @@ export const useDeleteStaffMember = <
 };
 
 /**
- * @summary List bookings (filterable by salonId and status)
+ * @summary List bookings (filterable by salonId, status, staffId)
  */
 export const getListBookingsUrl = (params?: ListBookingsParams) => {
   const normalizedParams = new URLSearchParams();
@@ -1311,7 +1449,7 @@ export type ListBookingsQueryResult = NonNullable<
 export type ListBookingsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List bookings (filterable by salonId and status)
+ * @summary List bookings (filterable by salonId, status, staffId)
  */
 
 export function useListBookings<
@@ -1347,8 +1485,8 @@ export const getCreateBookingUrl = () => {
 export const createBooking = async (
   createBookingBody: CreateBookingBody,
   options?: RequestInit,
-): Promise<Booking> => {
-  return customFetch<Booking>(getCreateBookingUrl(), {
+): Promise<CreateBookingResponse> => {
+  return customFetch<CreateBookingResponse>(getCreateBookingUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -1521,13 +1659,16 @@ export const updateBookingStatus = async (
   id: number,
   updateBookingStatusBody: UpdateBookingStatusBody,
   options?: RequestInit,
-): Promise<Booking> => {
-  return customFetch<Booking>(getUpdateBookingStatusUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(updateBookingStatusBody),
-  });
+): Promise<UpdateBookingStatusResponse> => {
+  return customFetch<UpdateBookingStatusResponse>(
+    getUpdateBookingStatusUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateBookingStatusBody),
+    },
+  );
 };
 
 export const getUpdateBookingStatusMutationOptions = <
@@ -1850,6 +1991,524 @@ export const useSendDepositNudge = <
   TContext
 > => {
   return useMutation(getSendDepositNudgeMutationOptions(options));
+};
+
+/**
+ * @summary Assign or reassign a staff member to a booking
+ */
+export const getAssignBookingStaffUrl = (id: number) => {
+  return `/api/bookings/${id}/staff`;
+};
+
+export const assignBookingStaff = async (
+  id: number,
+  assignBookingStaffBody: AssignBookingStaffBody,
+  options?: RequestInit,
+): Promise<Booking> => {
+  return customFetch<Booking>(getAssignBookingStaffUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(assignBookingStaffBody),
+  });
+};
+
+export const getAssignBookingStaffMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof assignBookingStaff>>,
+    TError,
+    { id: number; data: BodyType<AssignBookingStaffBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof assignBookingStaff>>,
+  TError,
+  { id: number; data: BodyType<AssignBookingStaffBody> },
+  TContext
+> => {
+  const mutationKey = ["assignBookingStaff"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof assignBookingStaff>>,
+    { id: number; data: BodyType<AssignBookingStaffBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return assignBookingStaff(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AssignBookingStaffMutationResult = NonNullable<
+  Awaited<ReturnType<typeof assignBookingStaff>>
+>;
+export type AssignBookingStaffMutationBody = BodyType<AssignBookingStaffBody>;
+export type AssignBookingStaffMutationError = ErrorType<void>;
+
+/**
+ * @summary Assign or reassign a staff member to a booking
+ */
+export const useAssignBookingStaff = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof assignBookingStaff>>,
+    TError,
+    { id: number; data: BodyType<AssignBookingStaffBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof assignBookingStaff>>,
+  TError,
+  { id: number; data: BodyType<AssignBookingStaffBody> },
+  TContext
+> => {
+  return useMutation(getAssignBookingStaffMutationOptions(options));
+};
+
+/**
+ * @summary Reschedule a booking to a new date/time
+ */
+export const getRescheduleBookingUrl = (id: number) => {
+  return `/api/bookings/${id}/reschedule`;
+};
+
+export const rescheduleBooking = async (
+  id: number,
+  rescheduleBookingBody: RescheduleBookingBody,
+  options?: RequestInit,
+): Promise<Booking> => {
+  return customFetch<Booking>(getRescheduleBookingUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rescheduleBookingBody),
+  });
+};
+
+export const getRescheduleBookingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rescheduleBooking>>,
+    TError,
+    { id: number; data: BodyType<RescheduleBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rescheduleBooking>>,
+  TError,
+  { id: number; data: BodyType<RescheduleBookingBody> },
+  TContext
+> => {
+  const mutationKey = ["rescheduleBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rescheduleBooking>>,
+    { id: number; data: BodyType<RescheduleBookingBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return rescheduleBooking(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RescheduleBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rescheduleBooking>>
+>;
+export type RescheduleBookingMutationBody = BodyType<RescheduleBookingBody>;
+export type RescheduleBookingMutationError = ErrorType<void>;
+
+/**
+ * @summary Reschedule a booking to a new date/time
+ */
+export const useRescheduleBooking = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rescheduleBooking>>,
+    TError,
+    { id: number; data: BodyType<RescheduleBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rescheduleBooking>>,
+  TError,
+  { id: number; data: BodyType<RescheduleBookingBody> },
+  TContext
+> => {
+  return useMutation(getRescheduleBookingMutationOptions(options));
+};
+
+/**
+ * @summary List all waitlist entries for a salon
+ */
+export const getGetWaitlistUrl = (salonId: number) => {
+  return `/api/salons/${salonId}/waitlist`;
+};
+
+export const getWaitlist = async (
+  salonId: number,
+  options?: RequestInit,
+): Promise<WaitlistListResponse> => {
+  return customFetch<WaitlistListResponse>(getGetWaitlistUrl(salonId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWaitlistQueryKey = (salonId: number) => {
+  return [`/api/salons/${salonId}/waitlist`] as const;
+};
+
+export const getGetWaitlistQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWaitlist>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWaitlist>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWaitlistQueryKey(salonId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWaitlist>>> = ({
+    signal,
+  }) => getWaitlist(salonId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!salonId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWaitlist>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWaitlistQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWaitlist>>
+>;
+export type GetWaitlistQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all waitlist entries for a salon
+ */
+
+export function useGetWaitlist<
+  TData = Awaited<ReturnType<typeof getWaitlist>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWaitlist>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWaitlistQueryOptions(salonId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a client to the waitlist for a specific slot
+ */
+export const getAddToWaitlistUrl = (salonId: number) => {
+  return `/api/salons/${salonId}/waitlist`;
+};
+
+export const addToWaitlist = async (
+  salonId: number,
+  addToWaitlistBody: AddToWaitlistBody,
+  options?: RequestInit,
+): Promise<WaitlistEntry> => {
+  return customFetch<WaitlistEntry>(getAddToWaitlistUrl(salonId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addToWaitlistBody),
+  });
+};
+
+export const getAddToWaitlistMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addToWaitlist>>,
+    TError,
+    { salonId: number; data: BodyType<AddToWaitlistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addToWaitlist>>,
+  TError,
+  { salonId: number; data: BodyType<AddToWaitlistBody> },
+  TContext
+> => {
+  const mutationKey = ["addToWaitlist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addToWaitlist>>,
+    { salonId: number; data: BodyType<AddToWaitlistBody> }
+  > = (props) => {
+    const { salonId, data } = props ?? {};
+
+    return addToWaitlist(salonId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddToWaitlistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addToWaitlist>>
+>;
+export type AddToWaitlistMutationBody = BodyType<AddToWaitlistBody>;
+export type AddToWaitlistMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a client to the waitlist for a specific slot
+ */
+export const useAddToWaitlist = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addToWaitlist>>,
+    TError,
+    { salonId: number; data: BodyType<AddToWaitlistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addToWaitlist>>,
+  TError,
+  { salonId: number; data: BodyType<AddToWaitlistBody> },
+  TContext
+> => {
+  return useMutation(getAddToWaitlistMutationOptions(options));
+};
+
+/**
+ * @summary Remove a waitlist entry (dismiss after notifying)
+ */
+export const getRemoveFromWaitlistUrl = (salonId: number, id: number) => {
+  return `/api/salons/${salonId}/waitlist/${id}`;
+};
+
+export const removeFromWaitlist = async (
+  salonId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveFromWaitlistUrl(salonId, id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveFromWaitlistMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeFromWaitlist>>,
+    TError,
+    { salonId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeFromWaitlist>>,
+  TError,
+  { salonId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["removeFromWaitlist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeFromWaitlist>>,
+    { salonId: number; id: number }
+  > = (props) => {
+    const { salonId, id } = props ?? {};
+
+    return removeFromWaitlist(salonId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveFromWaitlistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeFromWaitlist>>
+>;
+
+export type RemoveFromWaitlistMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a waitlist entry (dismiss after notifying)
+ */
+export const useRemoveFromWaitlist = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeFromWaitlist>>,
+    TError,
+    { salonId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeFromWaitlist>>,
+  TError,
+  { salonId: number; id: number },
+  TContext
+> => {
+  return useMutation(getRemoveFromWaitlistMutationOptions(options));
+};
+
+/**
+ * @summary Mark a waitlist entry as notified
+ */
+export const getMarkWaitlistNotifiedUrl = (salonId: number, id: number) => {
+  return `/api/salons/${salonId}/waitlist/${id}/notify`;
+};
+
+export const markWaitlistNotified = async (
+  salonId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<WaitlistEntry> => {
+  return customFetch<WaitlistEntry>(getMarkWaitlistNotifiedUrl(salonId, id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getMarkWaitlistNotifiedMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markWaitlistNotified>>,
+    TError,
+    { salonId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markWaitlistNotified>>,
+  TError,
+  { salonId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["markWaitlistNotified"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markWaitlistNotified>>,
+    { salonId: number; id: number }
+  > = (props) => {
+    const { salonId, id } = props ?? {};
+
+    return markWaitlistNotified(salonId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkWaitlistNotifiedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markWaitlistNotified>>
+>;
+
+export type MarkWaitlistNotifiedMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a waitlist entry as notified
+ */
+export const useMarkWaitlistNotified = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markWaitlistNotified>>,
+    TError,
+    { salonId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markWaitlistNotified>>,
+  TError,
+  { salonId: number; id: number },
+  TContext
+> => {
+  return useMutation(getMarkWaitlistNotifiedMutationOptions(options));
 };
 
 /**
@@ -2289,6 +2948,532 @@ export function useGetClient<
 }
 
 /**
+ * @summary Update a client's notes or other editable fields
+ */
+export const getUpdateClientUrl = (salonId: number, id: number) => {
+  return `/api/salons/${salonId}/clients/${id}`;
+};
+
+export const updateClient = async (
+  salonId: number,
+  id: number,
+  updateClientBody: UpdateClientBody,
+  options?: RequestInit,
+): Promise<ClientDetail> => {
+  return customFetch<ClientDetail>(getUpdateClientUrl(salonId, id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateClientBody),
+  });
+};
+
+export const getUpdateClientMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClient>>,
+    TError,
+    { salonId: number; id: number; data: BodyType<UpdateClientBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateClient>>,
+  TError,
+  { salonId: number; id: number; data: BodyType<UpdateClientBody> },
+  TContext
+> => {
+  const mutationKey = ["updateClient"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateClient>>,
+    { salonId: number; id: number; data: BodyType<UpdateClientBody> }
+  > = (props) => {
+    const { salonId, id, data } = props ?? {};
+
+    return updateClient(salonId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateClientMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateClient>>
+>;
+export type UpdateClientMutationBody = BodyType<UpdateClientBody>;
+export type UpdateClientMutationError = ErrorType<void>;
+
+/**
+ * @summary Update a client's notes or other editable fields
+ */
+export const useUpdateClient = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClient>>,
+    TError,
+    { salonId: number; id: number; data: BodyType<UpdateClientBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateClient>>,
+  TError,
+  { salonId: number; id: number; data: BodyType<UpdateClientBody> },
+  TContext
+> => {
+  return useMutation(getUpdateClientMutationOptions(options));
+};
+
+/**
+ * @summary List time-off blocks for a staff member
+ */
+export const getListStaffBlocksUrl = (
+  salonId: number,
+  staffId: number,
+  params?: ListStaffBlocksParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/salons/${salonId}/staff/${staffId}/blocks?${stringifiedParams}`
+    : `/api/salons/${salonId}/staff/${staffId}/blocks`;
+};
+
+export const listStaffBlocks = async (
+  salonId: number,
+  staffId: number,
+  params?: ListStaffBlocksParams,
+  options?: RequestInit,
+): Promise<ListStaffBlocksResponse> => {
+  return customFetch<ListStaffBlocksResponse>(
+    getListStaffBlocksUrl(salonId, staffId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListStaffBlocksQueryKey = (
+  salonId: number,
+  staffId: number,
+  params?: ListStaffBlocksParams,
+) => {
+  return [
+    `/api/salons/${salonId}/staff/${staffId}/blocks`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListStaffBlocksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStaffBlocks>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  staffId: number,
+  params?: ListStaffBlocksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStaffBlocks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListStaffBlocksQueryKey(salonId, staffId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listStaffBlocks>>> = ({
+    signal,
+  }) =>
+    listStaffBlocks(salonId, staffId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(salonId && staffId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStaffBlocks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStaffBlocksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStaffBlocks>>
+>;
+export type ListStaffBlocksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List time-off blocks for a staff member
+ */
+
+export function useListStaffBlocks<
+  TData = Awaited<ReturnType<typeof listStaffBlocks>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  staffId: number,
+  params?: ListStaffBlocksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStaffBlocks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStaffBlocksQueryOptions(
+    salonId,
+    staffId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a time-off block for a staff member
+ */
+export const getCreateStaffBlockUrl = (salonId: number, staffId: number) => {
+  return `/api/salons/${salonId}/staff/${staffId}/blocks`;
+};
+
+export const createStaffBlock = async (
+  salonId: number,
+  staffId: number,
+  createStaffBlockBody: CreateStaffBlockBody,
+  options?: RequestInit,
+): Promise<CreateStaffBlockResponse> => {
+  return customFetch<CreateStaffBlockResponse>(
+    getCreateStaffBlockUrl(salonId, staffId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createStaffBlockBody),
+    },
+  );
+};
+
+export const getCreateStaffBlockMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStaffBlock>>,
+    TError,
+    { salonId: number; staffId: number; data: BodyType<CreateStaffBlockBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createStaffBlock>>,
+  TError,
+  { salonId: number; staffId: number; data: BodyType<CreateStaffBlockBody> },
+  TContext
+> => {
+  const mutationKey = ["createStaffBlock"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createStaffBlock>>,
+    { salonId: number; staffId: number; data: BodyType<CreateStaffBlockBody> }
+  > = (props) => {
+    const { salonId, staffId, data } = props ?? {};
+
+    return createStaffBlock(salonId, staffId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateStaffBlockMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createStaffBlock>>
+>;
+export type CreateStaffBlockMutationBody = BodyType<CreateStaffBlockBody>;
+export type CreateStaffBlockMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a time-off block for a staff member
+ */
+export const useCreateStaffBlock = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStaffBlock>>,
+    TError,
+    { salonId: number; staffId: number; data: BodyType<CreateStaffBlockBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createStaffBlock>>,
+  TError,
+  { salonId: number; staffId: number; data: BodyType<CreateStaffBlockBody> },
+  TContext
+> => {
+  return useMutation(getCreateStaffBlockMutationOptions(options));
+};
+
+/**
+ * @summary Delete a time-off block
+ */
+export const getDeleteStaffBlockUrl = (
+  salonId: number,
+  staffId: number,
+  blockId: number,
+) => {
+  return `/api/salons/${salonId}/staff/${staffId}/blocks/${blockId}`;
+};
+
+export const deleteStaffBlock = async (
+  salonId: number,
+  staffId: number,
+  blockId: number,
+  options?: RequestInit,
+): Promise<DeleteStaffBlock200> => {
+  return customFetch<DeleteStaffBlock200>(
+    getDeleteStaffBlockUrl(salonId, staffId, blockId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteStaffBlockMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStaffBlock>>,
+    TError,
+    { salonId: number; staffId: number; blockId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteStaffBlock>>,
+  TError,
+  { salonId: number; staffId: number; blockId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteStaffBlock"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteStaffBlock>>,
+    { salonId: number; staffId: number; blockId: number }
+  > = (props) => {
+    const { salonId, staffId, blockId } = props ?? {};
+
+    return deleteStaffBlock(salonId, staffId, blockId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteStaffBlockMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteStaffBlock>>
+>;
+
+export type DeleteStaffBlockMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a time-off block
+ */
+export const useDeleteStaffBlock = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStaffBlock>>,
+    TError,
+    { salonId: number; staffId: number; blockId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteStaffBlock>>,
+  TError,
+  { salonId: number; staffId: number; blockId: number },
+  TContext
+> => {
+  return useMutation(getDeleteStaffBlockMutationOptions(options));
+};
+
+/**
+ * @summary Get booked appointment times for a staff member on a given date
+ */
+export const getGetStaffBusySlotsUrl = (
+  salonId: number,
+  staffId: number,
+  params: GetStaffBusySlotsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/salons/${salonId}/staff/${staffId}/busy-slots?${stringifiedParams}`
+    : `/api/salons/${salonId}/staff/${staffId}/busy-slots`;
+};
+
+export const getStaffBusySlots = async (
+  salonId: number,
+  staffId: number,
+  params: GetStaffBusySlotsParams,
+  options?: RequestInit,
+): Promise<StaffBusySlotsResponse> => {
+  return customFetch<StaffBusySlotsResponse>(
+    getGetStaffBusySlotsUrl(salonId, staffId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStaffBusySlotsQueryKey = (
+  salonId: number,
+  staffId: number,
+  params?: GetStaffBusySlotsParams,
+) => {
+  return [
+    `/api/salons/${salonId}/staff/${staffId}/busy-slots`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetStaffBusySlotsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStaffBusySlots>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  staffId: number,
+  params: GetStaffBusySlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStaffBusySlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetStaffBusySlotsQueryKey(salonId, staffId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStaffBusySlots>>
+  > = ({ signal }) =>
+    getStaffBusySlots(salonId, staffId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(salonId && staffId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStaffBusySlots>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStaffBusySlotsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStaffBusySlots>>
+>;
+export type GetStaffBusySlotsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get booked appointment times for a staff member on a given date
+ */
+
+export function useGetStaffBusySlots<
+  TData = Awaited<ReturnType<typeof getStaffBusySlots>>,
+  TError = ErrorType<unknown>,
+>(
+  salonId: number,
+  staffId: number,
+  params: GetStaffBusySlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStaffBusySlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStaffBusySlotsQueryOptions(
+    salonId,
+    staffId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Block or unblock a client from making new bookings
  */
 export const getSetClientBlacklistUrl = (salonId: number, id: number) => {
@@ -2468,22 +3653,44 @@ export function useGetDashboardSummary<
 /**
  * @summary Analytics — peak days, popular services, staff performance, weekly trend
  */
-export const getGetSalonAnalyticsUrl = (salonId: number) => {
-  return `/api/salons/${salonId}/analytics`;
+export const getGetSalonAnalyticsUrl = (
+  salonId: number,
+  params?: GetSalonAnalyticsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/salons/${salonId}/analytics?${stringifiedParams}`
+    : `/api/salons/${salonId}/analytics`;
 };
 
 export const getSalonAnalytics = async (
   salonId: number,
+  params?: GetSalonAnalyticsParams,
   options?: RequestInit,
 ): Promise<SalonAnalytics> => {
-  return customFetch<SalonAnalytics>(getGetSalonAnalyticsUrl(salonId), {
+  return customFetch<SalonAnalytics>(getGetSalonAnalyticsUrl(salonId, params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetSalonAnalyticsQueryKey = (salonId: number) => {
-  return [`/api/salons/${salonId}/analytics`] as const;
+export const getGetSalonAnalyticsQueryKey = (
+  salonId: number,
+  params?: GetSalonAnalyticsParams,
+) => {
+  return [
+    `/api/salons/${salonId}/analytics`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getGetSalonAnalyticsQueryOptions = <
@@ -2491,6 +3698,7 @@ export const getGetSalonAnalyticsQueryOptions = <
   TError = ErrorType<unknown>,
 >(
   salonId: number,
+  params?: GetSalonAnalyticsParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getSalonAnalytics>>,
@@ -2503,11 +3711,12 @@ export const getGetSalonAnalyticsQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getGetSalonAnalyticsQueryKey(salonId);
+    queryOptions?.queryKey ?? getGetSalonAnalyticsQueryKey(salonId, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getSalonAnalytics>>
-  > = ({ signal }) => getSalonAnalytics(salonId, { signal, ...requestOptions });
+  > = ({ signal }) =>
+    getSalonAnalytics(salonId, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -2535,6 +3744,7 @@ export function useGetSalonAnalytics<
   TError = ErrorType<unknown>,
 >(
   salonId: number,
+  params?: GetSalonAnalyticsParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getSalonAnalytics>>,
@@ -2544,7 +3754,11 @@ export function useGetSalonAnalytics<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetSalonAnalyticsQueryOptions(salonId, options);
+  const queryOptions = getGetSalonAnalyticsQueryOptions(
+    salonId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

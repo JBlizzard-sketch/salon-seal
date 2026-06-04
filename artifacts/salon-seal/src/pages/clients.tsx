@@ -1,23 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useListClients,
   getListClientsQueryKey,
   useGetClient,
   getGetClientQueryKey,
   useSetClientBlacklist,
+  useUpdateClient,
 } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 
-function getRiskBadge(noShowCount: number, isBlacklisted: boolean) {
+function getRiskBadge(noShowCount: number, isBlacklisted: boolean, isVip: boolean) {
   if (isBlacklisted) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
         🚫 Blocked
+      </span>
+    );
+  }
+  if (isVip) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+        ⭐ VIP
       </span>
     );
   }
@@ -53,6 +62,7 @@ export default function Clients() {
   );
 
   const blacklistedCount = (clients ?? []).filter(c => c.isBlacklisted).length;
+  const vipCount = (clients ?? []).filter(c => !c.isBlacklisted && c.isVip).length;
   const highRiskCount = (clients ?? []).filter(c => !c.isBlacklisted && c.noShowCount >= 3).length;
   const watchCount = (clients ?? []).filter(c => !c.isBlacklisted && c.noShowCount >= 1 && c.noShowCount < 3).length;
 
@@ -72,9 +82,14 @@ export default function Clients() {
         </div>
       </div>
 
-      {!isLoading && (blacklistedCount > 0 || highRiskCount > 0 || watchCount > 0) && (
+      {!isLoading && (blacklistedCount > 0 || vipCount > 0 || highRiskCount > 0 || watchCount > 0) && (
         <div className="flex items-center gap-4 p-3 rounded-lg border bg-muted/40 text-sm flex-wrap">
           <span className="text-muted-foreground">Client overview:</span>
+          {vipCount > 0 && (
+            <span className="flex items-center gap-1.5 font-medium text-yellow-700 dark:text-yellow-400">
+              ⭐ {vipCount} VIP
+            </span>
+          )}
           {blacklistedCount > 0 && (
             <span className="flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-400">
               🚫 {blacklistedCount} blocked
@@ -119,7 +134,7 @@ export default function Clients() {
                 <div className="col-span-2 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium">{client.name}</p>
-                    {getRiskBadge(client.noShowCount, client.isBlacklisted)}
+                    {getRiskBadge(client.noShowCount, client.isBlacklisted, client.isVip)}
                   </div>
                   <p className="text-xs text-muted-foreground">{client.phone}</p>
                 </div>
@@ -148,6 +163,10 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
   const salonId = 1;
   const queryClient = useQueryClient();
   const [toggling, setToggling] = useState(false);
+  const [togglingVip, setTogglingVip] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [notesDirty, setNotesDirty] = useState(false);
+  const [notesSaving, setNotesSaving] = useState(false);
 
   const { data: client, isLoading } = useGetClient(salonId, clientId || 0, {
     query: {
@@ -157,6 +176,15 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
   });
 
   const setBlacklist = useSetClientBlacklist();
+  const updateClient = useUpdateClient();
+
+  // Sync notes from server when client loads
+  useEffect(() => {
+    if (client) {
+      setNotes(client.notes ?? "");
+      setNotesDirty(false);
+    }
+  }, [client?.id]);
 
   const handleToggleBlacklist = () => {
     if (!client) return;
@@ -171,6 +199,39 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
           queryClient.invalidateQueries({ queryKey: getListClientsQueryKey(salonId) });
         },
         onError: () => setToggling(false),
+      },
+    );
+  };
+
+  const handleToggleVip = () => {
+    if (!client) return;
+    const next = !client.isVip;
+    setTogglingVip(true);
+    updateClient.mutate(
+      { salonId, id: client.id, data: { isVip: next } },
+      {
+        onSuccess: () => {
+          setTogglingVip(false);
+          queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(salonId, client.id) });
+          queryClient.invalidateQueries({ queryKey: getListClientsQueryKey(salonId) });
+        },
+        onError: () => setTogglingVip(false),
+      },
+    );
+  };
+
+  const handleSaveNotes = () => {
+    if (!client) return;
+    setNotesSaving(true);
+    updateClient.mutate(
+      { salonId, id: client.id, data: { notes: notes || null } },
+      {
+        onSuccess: () => {
+          setNotesSaving(false);
+          setNotesDirty(false);
+          queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(salonId, client.id) });
+        },
+        onError: () => setNotesSaving(false),
       },
     );
   };
@@ -195,7 +256,7 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
               <div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-2xl font-bold">{client.name}</h2>
-                  {getRiskBadge(client.noShowCount, client.isBlacklisted)}
+                  {getRiskBadge(client.noShowCount, client.isBlacklisted, client.isVip)}
                 </div>
                 <p className="text-muted-foreground mt-0.5">{client.phone}</p>
                 {client.isBlacklisted && (
@@ -232,6 +293,24 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
               </div>
             </div>
 
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-lg">Staff Notes</h3>
+                {notesDirty && (
+                  <Button size="sm" onClick={handleSaveNotes} disabled={notesSaving}>
+                    {notesSaving ? "Saving…" : "Save Notes"}
+                  </Button>
+                )}
+              </div>
+              <Textarea
+                rows={3}
+                placeholder="e.g. Prefers Aisha, allergic to relaxers, always 10 mins late…"
+                value={notes}
+                onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                className="text-sm resize-none"
+              />
+            </div>
+
             <div>
               <h3 className="font-semibold text-lg mb-3">Booking History</h3>
               {client.recentBookings.length === 0 ? (
@@ -261,20 +340,33 @@ function ClientDetailDialog({ clientId, onClose }: { clientId: number | null, on
         )}
 
         {client && (
-          <DialogFooter className="flex justify-between sm:justify-between">
-            <Button
-              variant={client.isBlacklisted ? "outline" : "destructive"}
-              size="sm"
-              disabled={toggling}
-              onClick={handleToggleBlacklist}
-              className={client.isBlacklisted ? "border-emerald-500 text-emerald-700 hover:bg-emerald-50" : ""}
-            >
-              {toggling
-                ? "Saving…"
-                : client.isBlacklisted
-                  ? "✅ Unblock Client"
-                  : "🚫 Block from Booking"}
-            </Button>
+          <DialogFooter className="flex justify-between sm:justify-between gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={togglingVip}
+                onClick={handleToggleVip}
+                className={client.isVip
+                  ? "border-yellow-400 text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+                  : "border-yellow-400 text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"}
+              >
+                {togglingVip ? "Saving…" : client.isVip ? "⭐ Remove VIP" : "⭐ Mark as VIP"}
+              </Button>
+              <Button
+                variant={client.isBlacklisted ? "outline" : "destructive"}
+                size="sm"
+                disabled={toggling}
+                onClick={handleToggleBlacklist}
+                className={client.isBlacklisted ? "border-emerald-500 text-emerald-700 hover:bg-emerald-50" : ""}
+              >
+                {toggling
+                  ? "Saving…"
+                  : client.isBlacklisted
+                    ? "✅ Unblock Client"
+                    : "🚫 Block from Booking"}
+              </Button>
+            </div>
             <Button variant="outline" onClick={onClose}>Close</Button>
           </DialogFooter>
         )}

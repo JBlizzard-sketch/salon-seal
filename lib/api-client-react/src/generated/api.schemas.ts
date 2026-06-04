@@ -9,6 +9,22 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface BusinessDayHours {
+  isOpen: boolean;
+  openTime: string;
+  closeTime: string;
+}
+
+export interface BusinessHours {
+  monday: BusinessDayHours;
+  tuesday: BusinessDayHours;
+  wednesday: BusinessDayHours;
+  thursday: BusinessDayHours;
+  friday: BusinessDayHours;
+  saturday: BusinessDayHours;
+  sunday: BusinessDayHours;
+}
+
 export interface Salon {
   id: number;
   name: string;
@@ -19,6 +35,11 @@ export interface Salon {
   location: string;
   cancellationWindowHours: number;
   platformFeePercent: number;
+  /** @nullable */
+  monthlyRevenueGoal: number | null;
+  /** @nullable */
+  autoBlacklistThreshold: number | null;
+  businessHours: BusinessHours;
   isActive: boolean;
   createdAt: string;
 }
@@ -29,6 +50,8 @@ export interface Service {
   name: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  category: string | null;
   price: number;
   depositAmount: number;
   durationMinutes: number;
@@ -54,6 +77,7 @@ export interface SalonPublic {
   phone: string;
   location: string;
   cancellationWindowHours: number;
+  businessHours: BusinessHours;
   services: Service[];
   staff: StaffMember[];
 }
@@ -80,6 +104,11 @@ export interface UpdateSalonBody {
   /** @nullable */
   cancellationWindowHours?: number | null;
   /** @nullable */
+  monthlyRevenueGoal?: number | null;
+  /** @nullable */
+  autoBlacklistThreshold?: number | null;
+  businessHours?: BusinessHours;
+  /** @nullable */
   isActive?: boolean | null;
 }
 
@@ -87,6 +116,8 @@ export interface CreateServiceBody {
   name: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  category?: string | null;
   price: number;
   depositAmount: number;
   durationMinutes: number;
@@ -98,6 +129,8 @@ export interface UpdateServiceBody {
   /** @nullable */
   description?: string | null;
   /** @nullable */
+  category?: string | null;
+  /** @nullable */
   price?: number | null;
   /** @nullable */
   depositAmount?: number | null;
@@ -105,6 +138,24 @@ export interface UpdateServiceBody {
   durationMinutes?: number | null;
   /** @nullable */
   isActive?: boolean | null;
+}
+
+export interface StaffPerformanceEntry {
+  staffId: number;
+  staffName: string;
+  role: string;
+  isActive: boolean;
+  completedBookings: number;
+  totalRevenue: number;
+  noShowCount: number;
+  noShowRate: number;
+  avgBookingValue: number;
+  totalBookings: number;
+}
+
+export interface GetStaffPerformanceResponse {
+  period: string;
+  entries: StaffPerformanceEntry[];
 }
 
 export interface CreateStaffMemberBody {
@@ -149,6 +200,7 @@ export interface Booking {
   status: BookingStatus;
   depositAmount: number;
   depositPaid: boolean;
+  depositWaived: boolean;
   /** @nullable */
   mpesaRef?: string | null;
   refundEligible: boolean;
@@ -159,8 +211,21 @@ export interface Booking {
   staffName?: string | null;
   /** @nullable */
   durationMinutes?: number | null;
+  /** @nullable */
+  recurringGroupId?: number | null;
+  /** @nullable */
+  recurrenceRule?: string | null;
   createdAt: string;
 }
+
+export type CreateBookingBodyRecurrenceRule =
+  (typeof CreateBookingBodyRecurrenceRule)[keyof typeof CreateBookingBodyRecurrenceRule];
+
+export const CreateBookingBodyRecurrenceRule = {
+  weekly: "weekly",
+  biweekly: "biweekly",
+  monthly: "monthly",
+} as const;
 
 export interface CreateBookingBody {
   salonId: number;
@@ -172,6 +237,19 @@ export interface CreateBookingBody {
   appointmentAt: string;
   /** @nullable */
   notes?: string | null;
+  depositWaived?: boolean;
+  recurrenceRule?: CreateBookingBodyRecurrenceRule;
+  recurrenceCount?: number;
+}
+
+export interface CreateBookingResponse {
+  booking: Booking;
+  additionalBookings: Booking[];
+}
+
+export interface AssignBookingStaffBody {
+  /** @nullable */
+  staffId: number | null;
 }
 
 export type UpdateBookingStatusBodyStatus =
@@ -188,9 +266,33 @@ export interface UpdateBookingStatusBody {
   status: UpdateBookingStatusBodyStatus;
 }
 
+export interface UpdateBookingStatusResponse {
+  booking: Booking;
+  autoBlacklisted: boolean;
+  /** @nullable */
+  autoBlacklistedName: string | null;
+}
+
 export interface CancelBookingBody {
   /** @nullable */
   reason?: string | null;
+}
+
+export interface WaitlistEntry {
+  id: number;
+  salonId: number;
+  /** @nullable */
+  staffId?: number | null;
+  /** @nullable */
+  serviceId?: number | null;
+  appointmentAt: string;
+  clientName: string;
+  clientPhone: string;
+  serviceName: string;
+  /** @nullable */
+  staffName?: string | null;
+  notified: boolean;
+  createdAt: string;
 }
 
 export interface CancellationResult {
@@ -198,6 +300,14 @@ export interface CancellationResult {
   refundEligible: boolean;
   refundAmount: number;
   message: string;
+  waitlistedClients: WaitlistEntry[];
+  autoPromoted: boolean;
+  /** @nullable */
+  autoPromotedClientName?: string | null;
+  /** @nullable */
+  autoPromotedPhone?: string | null;
+  /** @nullable */
+  autoPromotedMessage?: string | null;
 }
 
 export interface Client {
@@ -209,6 +319,7 @@ export interface Client {
   noShowCount: number;
   totalSpent: number;
   isBlacklisted: boolean;
+  isVip: boolean;
   /** @nullable */
   lastVisitAt?: string | null;
   createdAt: string;
@@ -223,10 +334,72 @@ export interface ClientDetail {
   noShowCount: number;
   totalSpent: number;
   isBlacklisted: boolean;
+  isVip: boolean;
+  /** @nullable */
+  notes: string | null;
   /** @nullable */
   lastVisitAt?: string | null;
   createdAt: string;
   recentBookings: Booking[];
+}
+
+export interface UpdateClientBody {
+  /** @nullable */
+  notes?: string | null;
+  isVip?: boolean;
+}
+
+export interface RescheduleBookingBody {
+  appointmentAt: string;
+}
+
+export interface StaffBusySlot {
+  appointmentAt: string;
+  durationMinutes: number;
+}
+
+export interface StaffBusySlotsResponse {
+  busySlots: StaffBusySlot[];
+}
+
+export interface StaffBlock {
+  id: number;
+  salonId: number;
+  staffId: number;
+  startAt: string;
+  endAt: string;
+  /** @nullable */
+  reason?: string | null;
+  createdAt: string;
+}
+
+export interface CreateStaffBlockBody {
+  startAt: string;
+  endAt: string;
+  /** @nullable */
+  reason?: string | null;
+}
+
+export interface ListStaffBlocksResponse {
+  blocks: StaffBlock[];
+}
+
+export interface CreateStaffBlockResponse {
+  block: StaffBlock;
+}
+
+export interface WaitlistListResponse {
+  entries: WaitlistEntry[];
+}
+
+export interface AddToWaitlistBody {
+  staffId?: number;
+  serviceId: number;
+  appointmentAt: string;
+  clientName: string;
+  clientPhone: string;
+  serviceName: string;
+  staffName?: string;
 }
 
 export interface SetBlacklistBody {
@@ -241,7 +414,19 @@ export interface DashboardSummary {
   pendingBookings: number;
   completedToday: number;
   noShowsToday: number;
+  monthRevenue: number;
   upcomingBookings: Booking[];
+}
+
+export interface AnalyticsSummary {
+  totalRevenue: number;
+  depositCollected: number;
+  totalBookings: number;
+  completedBookings: number;
+  noShowBookings: number;
+  completionRate: number;
+  noShowRate: number;
+  depositCollectionRate: number;
 }
 
 export interface DayCount {
@@ -263,6 +448,13 @@ export interface WeeklyTrendPoint {
   noShows: number;
 }
 
+export interface MonthlyRevenuePoint {
+  month: string;
+  bookings: number;
+  revenue: number;
+  noShows: number;
+}
+
 export interface StaffPerformance {
   staffId: number;
   staffName: string;
@@ -271,11 +463,20 @@ export interface StaffPerformance {
   noShows: number;
 }
 
+export interface HourCount {
+  hour: number;
+  label: string;
+  count: number;
+}
+
 export interface SalonAnalytics {
+  summary: AnalyticsSummary;
   peakDays: DayCount[];
   popularServices: ServiceCount[];
   weeklyTrend: WeeklyTrendPoint[];
+  monthlyRevenue: MonthlyRevenuePoint[];
   staffPerformance: StaffPerformance[];
+  peakHours: HourCount[];
 }
 
 export interface SimulatePaymentResponse {
@@ -374,11 +575,55 @@ export interface ActivityItem {
   occurredAt: string;
 }
 
+export type GetStaffPerformanceParams = {
+  period?: GetStaffPerformancePeriod;
+};
+
+export type GetStaffPerformancePeriod =
+  (typeof GetStaffPerformancePeriod)[keyof typeof GetStaffPerformancePeriod];
+
+export const GetStaffPerformancePeriod = {
+  week: "week",
+  month: "month",
+  "3months": "3months",
+  "6months": "6months",
+  all: "all",
+} as const;
+
 export type ListBookingsParams = {
   salonId?: number;
   status?: string;
   date?: string;
+  staffId?: number;
 };
+
+export type ListStaffBlocksParams = {
+  from?: string;
+  to?: string;
+};
+
+export type DeleteStaffBlock200 = {
+  success: boolean;
+};
+
+export type GetStaffBusySlotsParams = {
+  date: string;
+};
+
+export type GetSalonAnalyticsParams = {
+  period?: GetSalonAnalyticsPeriod;
+};
+
+export type GetSalonAnalyticsPeriod =
+  (typeof GetSalonAnalyticsPeriod)[keyof typeof GetSalonAnalyticsPeriod];
+
+export const GetSalonAnalyticsPeriod = {
+  week: "week",
+  month: "month",
+  "3months": "3months",
+  "6months": "6months",
+  all: "all",
+} as const;
 
 export type GetRecentActivityParams = {
   limit?: number;

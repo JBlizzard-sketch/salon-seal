@@ -4,6 +4,7 @@ import { db, clientsTable, bookingsTable } from "@workspace/db";
 import {
   ListClientsParams,
   GetClientParams,
+  UpdateClientBody,
   ListClientsResponse,
   GetClientResponse,
 } from "@workspace/api-zod";
@@ -44,6 +45,47 @@ router.get("/salons/:salonId/clients/:id", async (req, res): Promise<void> => {
     .orderBy(desc(bookingsTable.appointmentAt))
     .limit(10);
   res.json(GetClientResponse.parse({ ...client, recentBookings }));
+});
+
+router.patch("/salons/:salonId/clients/:id", async (req, res): Promise<void> => {
+  const salonId = parseInt(req.params.salonId);
+  const id = parseInt(req.params.id);
+  if (isNaN(salonId) || isNaN(id)) {
+    res.status(400).json({ error: "Invalid params" });
+    return;
+  }
+  const parsed = UpdateClientBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(clientsTable)
+    .where(and(eq(clientsTable.id, id), eq(clientsTable.salonId, salonId)));
+  if (!existing) {
+    res.status(404).json({ error: "Client not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(clientsTable)
+    .set({
+      notes: parsed.data.notes !== undefined ? parsed.data.notes : existing.notes,
+      ...(typeof (parsed.data as any).isVip === "boolean" ? { isVip: (parsed.data as any).isVip } : {}),
+    })
+    .where(eq(clientsTable.id, id))
+    .returning();
+
+  const recentBookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.clientId, id))
+    .orderBy(desc(bookingsTable.appointmentAt))
+    .limit(10);
+
+  res.json(GetClientResponse.parse({ ...updated, recentBookings }));
 });
 
 router.patch("/salons/:salonId/clients/:id/blacklist", async (req, res): Promise<void> => {

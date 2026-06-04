@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, salonsTable, servicesTable, staffTable } from "@workspace/db";
+import { db, salonsTable, servicesTable, staffTable, DEFAULT_BUSINESS_HOURS } from "@workspace/db";
 import {
   CreateSalonBody,
   UpdateSalonBody,
@@ -16,7 +16,7 @@ const router: IRouter = Router();
 
 router.get("/salons", async (_req, res): Promise<void> => {
   const salons = await db.select().from(salonsTable).orderBy(salonsTable.createdAt);
-  res.json(ListSalonsResponse.parse(salons.map((s) => ({ ...s, platformFeePercent: Number(s.platformFeePercent) }))));
+  res.json(ListSalonsResponse.parse(salons.map((s) => ({ ...s, platformFeePercent: Number(s.platformFeePercent), businessHours: s.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: s.autoBlacklistThreshold ?? null }))));
 });
 
 router.post("/salons", async (req, res): Promise<void> => {
@@ -26,7 +26,7 @@ router.post("/salons", async (req, res): Promise<void> => {
     return;
   }
   const [salon] = await db.insert(salonsTable).values(parsed.data).returning();
-  res.status(201).json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent) }));
+  res.status(201).json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
 });
 
 router.get("/salons/by-slug/:slug", async (req, res): Promise<void> => {
@@ -45,6 +45,7 @@ router.get("/salons/by-slug/:slug", async (req, res): Promise<void> => {
   res.json({
     ...salon,
     platformFeePercent: Number(salon.platformFeePercent),
+    businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS,
     services,
     staff,
   });
@@ -61,7 +62,7 @@ router.get("/salons/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Salon not found" });
     return;
   }
-  res.json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent) }));
+  res.json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
 });
 
 router.patch("/salons/:id", async (req, res): Promise<void> => {
@@ -84,7 +85,7 @@ router.patch("/salons/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Salon not found" });
     return;
   }
-  res.json(UpdateSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent) }));
+  res.json(UpdateSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
 });
 
 export default router;

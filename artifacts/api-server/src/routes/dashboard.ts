@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
-import { db, bookingsTable, activityTable } from "@workspace/db";
+import { db, bookingsTable, activityTable, salonsTable } from "@workspace/db";
 import {
   GetDashboardSummaryParams,
   GetSalonAnalyticsParams,
@@ -56,6 +56,13 @@ router.get("/salons/:salonId/dashboard", async (req, res): Promise<void> => {
 
   const pendingBookings = allBookings.filter((b) => b.status === "pending" || b.status === "confirmed").length;
 
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const monthRevenue = allBookings
+    .filter((b) => b.status === "completed" && new Date(b.appointmentAt) >= monthStart)
+    .reduce((sum, b) => sum + b.depositAmount, 0);
+
   const now = new Date();
   const upcomingBookings = allBookings
     .filter((b) => new Date(b.appointmentAt) > now && (b.status === "confirmed" || b.status === "pending"))
@@ -71,6 +78,7 @@ router.get("/salons/:salonId/dashboard", async (req, res): Promise<void> => {
       pendingBookings,
       completedToday,
       noShowsToday,
+      monthRevenue,
       upcomingBookings,
     }),
   );
@@ -84,10 +92,51 @@ router.get("/salons/:salonId/analytics", async (req, res): Promise<void> => {
   }
   const { salonId } = params.data;
 
+  const period = (req.query.period as string) || "all";
+  const now = new Date();
+  let cutoff: Date | null = null;
+  if (period === "week") {
+    cutoff = new Date(now); cutoff.setDate(now.getDate() - 7);
+  } else if (period === "month") {
+    cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 1);
+  } else if (period === "3months") {
+    cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 3);
+  } else if (period === "6months") {
+    cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 6);
+  }
+
   const allBookings = await db
     .select()
     .from(bookingsTable)
-    .where(and(eq(bookingsTable.salonId, salonId)));
+    .where(
+      cutoff
+        ? and(eq(bookingsTable.salonId, salonId), gte(bookingsTable.appointmentAt, cutoff))
+        : eq(bookingsTable.salonId, salonId),
+    );
+
+  // All-time bookings for monthly revenue chart (always last 12 months)
+  const twelveMonthsCutoff = new Date(now);
+  twelveMonthsCutoff.setMonth(now.getMonth() - 11);
+  twelveMonthsCutoff.setDate(1);
+  twelveMonthsCutoff.setHours(0, 0, 0, 0);
+  const allTimeBookings = cutoff
+    ? await db.select().from(bookingsTable).where(and(eq(bookingsTable.salonId, salonId), gte(bookingsTable.appointmentAt, twelveMonthsCutoff)))
+    : allBookings;
+
+  // Summary
+  const completed = allBookings.filter(b => b.status === "completed");
+  const noShows = allBookings.filter(b => b.status === "no_show");
+  const nonCancelled = allBookings.filter(b => b.status !== "cancelled");
+  const totalRevenue = completed.reduce((s, b) => s + b.depositAmount, 0);
+  const depositCollected = allBookings.filter(b => b.depositPaid).reduce((s, b) => s + b.depositAmount, 0);
+  const totalBookings = allBookings.length;
+  const completedBookings = completed.length;
+  const noShowBookings = noShows.length;
+  const completionRate = nonCancelled.length > 0 ? Math.round((completedBookings / nonCancelled.length) * 1000) / 10 : 0;
+  const noShowRate = nonCancelled.length > 0 ? Math.round((noShowBookings / nonCancelled.length) * 1000) / 10 : 0;
+  const depositCollectionRate = totalBookings > 0 ? Math.round((allBookings.filter(b => b.depositPaid).length / totalBookings) * 1000) / 10 : 0;
+
+  const summary = { totalRevenue, depositCollected, totalBookings, completedBookings, noShowBookings, completionRate, noShowRate, depositCollectionRate };
 
   // Peak days
   const dayCounts: Record<string, number> = {};
@@ -103,9 +152,7 @@ router.get("/salons/:salonId/analytics", async (req, res): Promise<void> => {
   // Popular services
   const serviceCounts: Record<number, { serviceName: string; count: number; revenue: number }> = {};
   for (const b of allBookings) {
-    if (!serviceCounts[b.serviceId]) {
-      serviceCounts[b.serviceId] = { serviceName: b.serviceName, count: 0, revenue: 0 };
-    }
+    if (!serviceCounts[b.serviceId]) serviceCounts[b.serviceId] = { serviceName: b.serviceName, count: 0, revenue: 0 };
     serviceCounts[b.serviceId].count++;
     if (b.status === "completed") serviceCounts[b.serviceId].revenue += b.depositAmount;
   }
@@ -114,7 +161,7 @@ router.get("/salons/:salonId/analytics", async (req, res): Promise<void> => {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  // Weekly trend (last 8 weeks)
+  // Weekly trend (last 8 within period)
   const weeklyMap: Record<string, { bookings: number; revenue: number; noShows: number }> = {};
   for (const b of allBookings) {
     const d = new Date(b.appointmentAt);
@@ -131,21 +178,47 @@ router.get("/salons/:salonId/analytics", async (req, res): Promise<void> => {
     .sort((a, b) => a.week.localeCompare(b.week))
     .slice(-8);
 
+  // Monthly revenue (last 12 months always)
+  const monthlyMap: Record<string, { bookings: number; revenue: number; noShows: number }> = {};
+  for (const b of allTimeBookings) {
+    const d = new Date(b.appointmentAt);
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthlyMap[month]) monthlyMap[month] = { bookings: 0, revenue: 0, noShows: 0 };
+    monthlyMap[month].bookings++;
+    if (b.status === "completed") monthlyMap[month].revenue += b.depositAmount;
+    if (b.status === "no_show") monthlyMap[month].noShows++;
+  }
+  const monthlyRevenue = Object.entries(monthlyMap)
+    .map(([month, data]) => ({ month, ...data }))
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .slice(-12);
+
   // Staff performance
   const staffMap: Record<number, { staffName: string; bookings: number; completed: number; noShows: number }> = {};
   for (const b of allBookings) {
     if (!b.staffId) continue;
-    if (!staffMap[b.staffId]) {
-      staffMap[b.staffId] = { staffName: b.staffName ?? "Unknown", bookings: 0, completed: 0, noShows: 0 };
-    }
+    if (!staffMap[b.staffId]) staffMap[b.staffId] = { staffName: b.staffName ?? "Unknown", bookings: 0, completed: 0, noShows: 0 };
     staffMap[b.staffId].bookings++;
     if (b.status === "completed") staffMap[b.staffId].completed++;
     if (b.status === "no_show") staffMap[b.staffId].noShows++;
   }
   const staffPerformance = Object.entries(staffMap).map(([staffId, data]) => ({ staffId: Number(staffId), ...data }));
 
+  // Peak hours (0–23)
+  const hourCounts: Record<number, number> = {};
+  for (const b of allBookings) {
+    const h = new Date(b.appointmentAt).getHours();
+    hourCounts[h] = (hourCounts[h] ?? 0) + 1;
+  }
+  const fmt12 = (h: number) => h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
+  const peakHours = Array.from({ length: 24 }, (_, h) => ({
+    hour: h,
+    label: fmt12(h),
+    count: hourCounts[h] ?? 0,
+  })).filter(p => p.count > 0);
+
   res.json(
-    GetSalonAnalyticsResponse.parse({ peakDays, popularServices, weeklyTrend, staffPerformance }),
+    GetSalonAnalyticsResponse.parse({ summary, peakDays, popularServices, weeklyTrend, monthlyRevenue, staffPerformance, peakHours }),
   );
 });
 

@@ -6,13 +6,21 @@ import {
   useListReminders,
   getListRemindersQueryKey,
   useSendDepositNudge,
+  useSimulateMpesaPayment,
   useCreateBooking,
   useCancelBooking,
+  useAssignBookingStaff,
   useListServices,
   getListServicesQueryKey,
   useListStaff,
   getListStaffQueryKey,
+  useRescheduleBooking,
+  useGetWaitlist,
+  getGetWaitlistQueryKey,
+  useRemoveFromWaitlist,
+  useMarkWaitlistNotified,
 } from "@workspace/api-client-react";
+import type { WaitlistEntry } from "@workspace/api-client-react";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +42,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -74,7 +83,7 @@ function bookingHeightPx(durationMinutes: number | null | undefined): number {
 
 export default function Bookings() {
   const salonId = 1;
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [viewMode, setViewMode] = useState<"list" | "calendar" | "waitlist">("list");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [exporting, setExporting] = useState(false);
   const [reminderSending, setReminderSending] = useState<Record<number, boolean>>({});
@@ -85,11 +94,26 @@ export default function Bookings() {
   const [cancelTarget, setCancelTarget] = useState<BookingRow | null>(null);
   const [calWeekStart, setCalWeekStart] = useState(() => getWeekStart(new Date()));
   const [calDetailBooking, setCalDetailBooking] = useState<BookingRow | null>(null);
+  const [staffFilter, setStaffFilter] = useState<string>("all");
+  const [assigningStaffBooking, setAssigningStaffBooking] = useState<BookingRow | null>(null);
+  const [reschedulingBooking, setReschedulingBooking] = useState<BookingRow | null>(null);
   const queryClient = useQueryClient();
 
+  const { data: staff } = useListStaff(salonId, {
+    query: { queryKey: getListStaffQueryKey(salonId) },
+  });
+  const activeStaffList = (staff ?? []).filter(s => s.isActive);
+
+  const { data: waitlistData, refetch: refetchWaitlist } = useGetWaitlist(salonId, {
+    query: { queryKey: getGetWaitlistQueryKey(salonId) },
+  });
+  const removeFromWaitlist = useRemoveFromWaitlist();
+  const markWaitlistNotified = useMarkWaitlistNotified();
+  const pendingWaitlist = (waitlistData?.entries ?? []).filter(e => !e.notified);
+
   const { data: bookings, isLoading } = useListBookings(
-    { salonId, status: statusFilter === "all" ? undefined : statusFilter },
-    { query: { queryKey: [...getListBookingsQueryKey(), { salonId, statusFilter }] } },
+    { salonId, status: statusFilter === "all" ? undefined : statusFilter, staffId: staffFilter === "all" || staffFilter === "none" ? undefined : Number(staffFilter) },
+    { query: { queryKey: [...getListBookingsQueryKey(), { salonId, statusFilter, staffFilter }] } },
   );
 
   const { data: allBookings } = useListBookings(
@@ -114,14 +138,25 @@ export default function Bookings() {
   const updateStatus = useUpdateBookingStatus();
   const sendReminder = useSendBookingReminder();
   const sendNudge = useSendDepositNudge();
+  const confirmPayment = useSimulateMpesaPayment();
+  const [confirmingPayment, setConfirmingPayment] = useState<Record<number, boolean>>({});
+
+  const { toast } = useToast();
 
   const handleStatusUpdate = (id: number, status: string) => {
     updateStatus.mutate(
       { id, data: { status: status as "arrived" | "completed" | "no_show" | "cancelled" } },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
           setCalDetailBooking(null);
+          if (data.autoBlacklisted && data.autoBlacklistedName) {
+            toast({
+              title: "Client auto-blocked",
+              description: `${data.autoBlacklistedName} has been automatically blocked after reaching the no-show limit.`,
+              variant: "destructive",
+            });
+          }
         },
       },
     );
@@ -153,6 +188,21 @@ export default function Bookings() {
           queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
         },
         onError: () => setNudgeSending((p) => ({ ...p, [id]: false })),
+      },
+    );
+  };
+
+  const handleConfirmPayment = (id: number) => {
+    setConfirmingPayment((p) => ({ ...p, [id]: true }));
+    confirmPayment.mutate(
+      { id },
+      {
+        onSuccess: (data) => {
+          setConfirmingPayment((p) => ({ ...p, [id]: false }));
+          queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+          toast({ title: "Payment confirmed", description: `M-Pesa ref: ${data.mpesaRef}` });
+        },
+        onError: () => setConfirmingPayment((p) => ({ ...p, [id]: false })),
       },
     );
   };
@@ -228,6 +278,17 @@ export default function Bookings() {
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={staffFilter} onValueChange={setStaffFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All Staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Staff</SelectItem>
+                  {activeStaffList.map(s => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="outline"
                 onClick={handleExportCsv}
@@ -269,11 +330,71 @@ export default function Bookings() {
             >
               🗓 Calendar
             </button>
+            <button
+              className={`relative px-3 py-1.5 text-sm border-l transition-colors ${viewMode === "waitlist" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              onClick={() => setViewMode("waitlist")}
+            >
+              ⏳ Waitlist
+              {pendingWaitlist.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {pendingWaitlist.length}
+                </span>
+              )}
+            </button>
           </div>
 
           <Button onClick={() => setShowNewBooking(true)}>+ New Booking</Button>
         </div>
       </div>
+
+      {viewMode === "waitlist" && (
+        <div className="border rounded-md bg-card">
+          {pendingWaitlist.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground">
+              <p className="font-medium">No one on the waitlist</p>
+              <p className="text-sm mt-1">Clients who join when a slot is fully booked will appear here.</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {(waitlistData?.entries ?? []).map((entry) => (
+                <div key={entry.id} className={`p-4 flex items-start justify-between gap-4 ${entry.notified ? "opacity-50" : ""}`}>
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{entry.clientName}</p>
+                      {entry.notified && <span className="text-xs bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">Notified</span>}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{entry.clientPhone}</p>
+                    <p className="text-sm">{entry.serviceName}{entry.staffName ? ` · ${entry.staffName}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(entry.appointmentAt), "EEE, MMM d 'at' h:mm a")}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    {!entry.notified && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                        disabled={markWaitlistNotified.isPending}
+                        onClick={() => markWaitlistNotified.mutate({ salonId, id: entry.id }, { onSuccess: () => refetchWaitlist() })}
+                      >
+                        ✓ Mark Notified
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      disabled={removeFromWaitlist.isPending}
+                      onClick={() => removeFromWaitlist.mutate({ salonId, id: entry.id }, { onSuccess: () => refetchWaitlist() })}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {viewMode === "list" ? (
         <div className="border rounded-md bg-card">
@@ -306,11 +427,33 @@ export default function Bookings() {
                       </div>
                       <div>
                         <p className="text-sm font-medium truncate">{booking.serviceName}</p>
-                        <p className="text-xs text-muted-foreground">{booking.staffName || "No staff"}</p>
+                        <button
+                          className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline text-left transition-colors"
+                          onClick={(e) => { e.stopPropagation(); setAssigningStaffBooking(booking); }}
+                          title="Click to assign or reassign staff"
+                        >
+                          {booking.staffName || "Assign staff…"}
+                        </button>
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{format(new Date(booking.appointmentAt), "MMM d, yyyy")}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(booking.appointmentAt), "h:mm a")}</p>
+                        {(booking.status === "pending" || booking.status === "confirmed" || booking.status === "arrived") ? (
+                          <button
+                            className="text-left group"
+                            title="Click to reschedule"
+                            onClick={(e) => { e.stopPropagation(); setReschedulingBooking(booking); }}
+                          >
+                            <p className="text-sm font-medium group-hover:text-primary transition-colors">{format(new Date(booking.appointmentAt), "MMM d, yyyy")}</p>
+                            <p className="text-xs text-muted-foreground group-hover:text-primary/70 transition-colors flex items-center gap-1">
+                              {format(new Date(booking.appointmentAt), "h:mm a")}
+                              <span className="opacity-0 group-hover:opacity-100 text-[10px] text-primary">✎</span>
+                            </p>
+                          </button>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">{format(new Date(booking.appointmentAt), "MMM d, yyyy")}</p>
+                            <p className="text-xs text-muted-foreground">{format(new Date(booking.appointmentAt), "h:mm a")}</p>
+                          </>
+                        )}
                       </div>
                       <div className="flex flex-col items-start gap-1">
                         <Badge
@@ -323,16 +466,30 @@ export default function Bookings() {
                           {booking.status.replace("_", " ")}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {booking.depositPaid ? (
+                          {booking.depositWaived ? (
+                            <span className="text-emerald-600">✓ Deposit waived</span>
+                          ) : booking.depositPaid ? (
                             <span className="text-emerald-600">✓ Deposit paid</span>
                           ) : booking.status !== "cancelled" ? (
                             <span className="text-amber-600">⏳ Ksh {booking.depositAmount} pending</span>
                           ) : null}
                         </span>
+                        {booking.recurringGroupId && <span className="text-xs text-violet-600 font-medium">🔁 Recurring</span>}
                         {alreadySent && <span className="text-xs text-blue-600 font-medium">📱 Reminder sent</span>}
                       </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
+                      {!booking.depositPaid && !booking.depositWaived && booking.status === "pending" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-green-600 text-green-700 hover:bg-green-50 text-xs"
+                          disabled={confirmingPayment[booking.id]}
+                          onClick={() => handleConfirmPayment(booking.id)}
+                        >
+                          {confirmingPayment[booking.id] ? "Confirming…" : "✅ Confirm Payment"}
+                        </Button>
+                      )}
                       {canNudge && (
                         <Button
                           size="sm"
@@ -505,6 +662,7 @@ export default function Bookings() {
       {calDetailBooking && (
         <CalendarBookingDialog
           booking={calDetailBooking}
+          salonId={salonId}
           sentBookingIds={sentBookingIds}
           reminderSending={reminderSending}
           nudgeSending={nudgeSending}
@@ -539,6 +697,31 @@ export default function Bookings() {
         />
       )}
 
+      {/* Staff Assign Dialog */}
+      {assigningStaffBooking && (
+        <StaffAssignDialog
+          booking={assigningStaffBooking}
+          salonId={salonId}
+          onClose={() => setAssigningStaffBooking(null)}
+          onAssigned={() => {
+            setAssigningStaffBooking(null);
+            queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+          }}
+        />
+      )}
+
+      {/* Reschedule Dialog */}
+      {reschedulingBooking && (
+        <RescheduleDialog
+          booking={reschedulingBooking}
+          onClose={() => setReschedulingBooking(null)}
+          onRescheduled={() => {
+            setReschedulingBooking(null);
+            queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+          }}
+        />
+      )}
+
       {/* Deposit Nudge Preview */}
       <Dialog open={!!nudgeResult} onOpenChange={(o) => !o && setNudgeResult(null)}>
         <DialogContent className="max-w-lg">
@@ -565,6 +748,7 @@ export default function Bookings() {
 
 function CalendarBookingDialog({
   booking,
+  salonId,
   sentBookingIds,
   reminderSending,
   nudgeSending,
@@ -575,6 +759,7 @@ function CalendarBookingDialog({
   onClose,
 }: {
   booking: BookingRow;
+  salonId: number;
   sentBookingIds: Set<number>;
   reminderSending: Record<number, boolean>;
   nudgeSending: Record<number, boolean>;
@@ -584,6 +769,20 @@ function CalendarBookingDialog({
   onCancel: (b: BookingRow) => void;
   onClose: () => void;
 }) {
+  const [showReassign, setShowReassign] = useState(false);
+  const [reassignStaffId, setReassignStaffId] = useState<string>(booking.staffId ? String(booking.staffId) : "");
+  const { data: staffData } = useListStaff(salonId, { query: { queryKey: getListStaffQueryKey(salonId) } });
+  const calActiveStaff = (staffData ?? []).filter(s => s.isActive);
+  const assignStaff = useAssignBookingStaff();
+  const qc = useQueryClient();
+
+  const handleReassign = () => {
+    assignStaff.mutate(
+      { id: booking.id, data: { staffId: reassignStaffId ? Number(reassignStaffId) : null } },
+      { onSuccess: () => { qc.invalidateQueries({ queryKey: getListBookingsQueryKey() }); setShowReassign(false); onClose(); } }
+    );
+  };
+
   const now = new Date();
   const appt = new Date(booking.appointmentAt);
   const isUpcoming = appt > now;
@@ -609,14 +808,35 @@ function CalendarBookingDialog({
                 {booking.status.replace("_", " ")}
               </span>
             </div>
-            <div className="pt-1 space-y-0.5">
+            <div className="pt-1 space-y-1">
               <p className="font-medium">{booking.serviceName}</p>
-              {booking.staffName && <p className="text-muted-foreground">with {booking.staffName}</p>}
+              {!showReassign ? (
+                <div className="flex items-center gap-2">
+                  <p className="text-muted-foreground text-sm">{booking.staffName ? `with ${booking.staffName}` : "No stylist assigned"}</p>
+                  <button className="text-xs text-primary hover:underline" onClick={() => setShowReassign(true)}>Change</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Select value={reassignStaffId} onValueChange={setReassignStaffId}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Any available" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Any available</SelectItem>
+                      {calActiveStaff.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} · {s.role}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-7 text-xs px-2" onClick={handleReassign} disabled={assignStaff.isPending}>Save</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setShowReassign(false)}>✕</Button>
+                </div>
+              )}
               <p className="text-muted-foreground">{format(appt, "EEEE, MMM d")} at {format(appt, "h:mm a")}</p>
               {booking.durationMinutes && <p className="text-muted-foreground">{booking.durationMinutes} min</p>}
             </div>
             <div className="pt-1">
-              {booking.depositPaid ? (
+              {booking.depositWaived ? (
+                <span className="text-emerald-600 text-xs font-medium">✓ Deposit waived</span>
+              ) : booking.depositPaid ? (
                 <span className="text-emerald-600 text-xs font-medium">✓ Deposit paid · Ksh {booking.depositAmount.toLocaleString()}</span>
               ) : (
                 <span className="text-amber-600 text-xs font-medium">⏳ Deposit pending · Ksh {booking.depositAmount.toLocaleString()}</span>
@@ -669,7 +889,15 @@ function CancelBookingDialog({
   onCancelled: () => void;
 }) {
   const [reason, setReason] = useState("");
-  const [result, setResult] = useState<{ refundEligible: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    refundEligible: boolean;
+    message: string;
+    waitlistedClients: WaitlistEntry[];
+    autoPromoted: boolean;
+    autoPromotedClientName: string | null;
+    autoPromotedPhone: string | null;
+    autoPromotedMessage: string | null;
+  } | null>(null);
   const cancelBooking = useCancelBooking();
 
   const handleConfirm = () => {
@@ -677,11 +905,19 @@ function CancelBookingDialog({
       { id: booking.id, data: { reason: reason || null } },
       {
         onSuccess: (data) => {
-          setResult({ refundEligible: data.refundEligible, message: data.message });
+          setResult({
+            refundEligible: data.refundEligible,
+            message: data.message,
+            waitlistedClients: data.waitlistedClients,
+            autoPromoted: data.autoPromoted,
+            autoPromotedClientName: data.autoPromotedClientName ?? null,
+            autoPromotedPhone: data.autoPromotedPhone ?? null,
+            autoPromotedMessage: data.autoPromotedMessage ?? null,
+          });
           onCancelled();
         },
         onError: () => {
-          setResult({ refundEligible: false, message: "Failed to cancel booking. Please try again." });
+          setResult({ refundEligible: false, message: "Failed to cancel booking. Please try again.", waitlistedClients: [], autoPromoted: false, autoPromotedClientName: null, autoPromotedPhone: null, autoPromotedMessage: null });
         },
       },
     );
@@ -702,6 +938,44 @@ function CancelBookingDialog({
               </DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">{result.message}</p>
+
+            {result.autoPromoted && result.autoPromotedClientName && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold text-sm">
+                    📲 Waitlist auto-notified
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium">{result.autoPromotedClientName}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{result.autoPromotedPhone}</span>
+                  </div>
+                  <span className="text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-medium">WhatsApp sent</span>
+                </div>
+                {result.autoPromotedMessage && (
+                  <div className="bg-[#dcf8c6] dark:bg-emerald-900/30 rounded-xl p-3 text-xs whitespace-pre-wrap font-sans leading-relaxed border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100">
+                    {result.autoPromotedMessage}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {result.waitlistedClients.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 space-y-2">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  ⏳ {result.waitlistedClients.length} more client{result.waitlistedClients.length > 1 ? "s" : ""} on the waitlist
+                </p>
+                {result.waitlistedClients.map(wl => (
+                  <div key={wl.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="font-medium">{wl.clientName}</span>
+                      <span className="text-muted-foreground ml-2">{wl.clientPhone}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <DialogFooter>
               <Button onClick={onClose}>Done</Button>
             </DialogFooter>
@@ -717,13 +991,15 @@ function CancelBookingDialog({
                 <p className="text-muted-foreground">
                   {booking.serviceName} · {format(apptDate, "EEE, MMM d")} at {format(apptDate, "h:mm a")}
                 </p>
-                {booking.depositPaid && (
+                {(booking.depositPaid || booking.depositWaived) && (
                   <p className="text-muted-foreground">
-                    Deposit paid: <span className="font-medium text-foreground">Ksh {booking.depositAmount.toLocaleString()}</span>
+                    {booking.depositWaived
+                      ? <span className="text-emerald-600 font-medium">Deposit waived</span>
+                      : <>Deposit paid: <span className="font-medium text-foreground">Ksh {booking.depositAmount.toLocaleString()}</span></>}
                   </p>
                 )}
               </div>
-              {booking.depositPaid && (
+              {booking.depositPaid && !booking.depositWaived && (
                 <div className={`rounded-lg p-3 text-sm border ${likelyRefund ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300" : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300"}`}>
                   {likelyRefund
                     ? `✅ More than 24 hours away — deposit of Ksh ${booking.depositAmount.toLocaleString()} will be refunded via M-Pesa.`
@@ -785,8 +1061,12 @@ function NewBookingDialog({
     date: defaultDate,
     time: defaultTime,
     notes: "",
+    depositWaived: false,
+    recurrenceRule: "" as "" | "weekly" | "biweekly" | "monthly",
+    recurrenceCount: "4",
   });
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const activeServices = (services ?? []).filter((s) => s.isActive);
   const activeStaff = (staff ?? []).filter((s) => s.isActive);
@@ -813,14 +1093,32 @@ function NewBookingDialog({
           clientPhone: form.clientPhone,
           appointmentAt: appointmentAt.toISOString() as unknown as Date,
           notes: form.notes || null,
+          depositWaived: form.depositWaived,
+          recurrenceRule: form.recurrenceRule || undefined,
+          recurrenceCount: form.recurrenceRule ? Number(form.recurrenceCount) : undefined,
         },
       },
       {
-        onSuccess: () => {
-          setForm({ clientName: "", clientPhone: "", serviceId: "", staffId: "", date: defaultDate, time: defaultTime, notes: "" });
+        onSuccess: (data) => {
+          const total = 1 + (data.additionalBookings?.length ?? 0);
+          setForm({ clientName: "", clientPhone: "", serviceId: "", staffId: "", date: defaultDate, time: defaultTime, notes: "", depositWaived: false, recurrenceRule: "", recurrenceCount: "4" });
           onCreated();
+          if (total > 1) {
+            toast({
+              title: `${total} recurring appointments created`,
+              description: `${form.clientName}'s ${form.recurrenceRule} series has been scheduled.`,
+            });
+          }
         },
-        onError: (err: any) => setError(err?.message ?? "Failed to create booking."),
+        onError: (err: any) => {
+          const serverError = err?.response?.data?.error;
+          const serverMsg = err?.response?.data?.message;
+          if (serverError === "STAFF_CONFLICT") {
+            setError(serverMsg ?? "That staff member is already booked at this time. Please choose a different time.");
+          } else {
+            setError(err?.message ?? "Failed to create booking.");
+          }
+        },
       },
     );
   };
@@ -888,11 +1186,64 @@ function NewBookingDialog({
             <Textarea id="nb-notes" rows={2} placeholder="Any special requests or notes…" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
 
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Repeat</Label>
+              <Select value={form.recurrenceRule} onValueChange={(v) => setForm({ ...form, recurrenceRule: v as typeof form.recurrenceRule })}>
+                <SelectTrigger className="w-[160px] h-8 text-sm">
+                  <SelectValue placeholder="No repeat" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No repeat</SelectItem>
+                  <SelectItem value="weekly">Every week</SelectItem>
+                  <SelectItem value="biweekly">Every 2 weeks</SelectItem>
+                  <SelectItem value="monthly">Every month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.recurrenceRule && (
+              <div className="flex items-center justify-between">
+                <Label className="text-sm text-muted-foreground">Number of appointments</Label>
+                <Select value={form.recurrenceCount} onValueChange={(v) => setForm({ ...form, recurrenceCount: v })}>
+                  <SelectTrigger className="w-[100px] h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2,3,4,6,8,10,12].map(n => (
+                      <SelectItem key={n} value={String(n)}>{n} appts</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {form.recurrenceRule && (
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+                🔁 Will create <strong>{form.recurrenceCount} appointments</strong> starting {format(new Date(`${form.date}T${form.time}:00`), "MMM d")} — one {form.recurrenceRule === "weekly" ? "every week" : form.recurrenceRule === "biweekly" ? "every 2 weeks" : "every month"}
+              </p>
+            )}
+          </div>
+
           {selectedService && (
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-sm">
-              <span className="font-medium">Deposit required: </span>
-              <span className="text-amber-700 dark:text-amber-400 font-bold">Ksh {selectedService.depositAmount.toLocaleString()}</span>
-              <span className="text-muted-foreground"> (client will be sent an M-Pesa request)</span>
+            <div className={`rounded-lg border p-3 text-sm space-y-2 ${form.depositWaived ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800" : "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-medium">Deposit: </span>
+                  {form.depositWaived ? (
+                    <span className="line-through text-muted-foreground">Ksh {selectedService.depositAmount.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-400 font-bold">Ksh {selectedService.depositAmount.toLocaleString()}</span>
+                  )}
+                  {form.depositWaived && <span className="ml-2 text-emerald-700 dark:text-emerald-400 font-semibold">Waived — booking confirmed immediately</span>}
+                  {!form.depositWaived && <span className="text-muted-foreground"> (client will be sent an M-Pesa request)</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, depositWaived: !form.depositWaived })}
+                  className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${form.depositWaived ? "border-emerald-400 text-emerald-700 bg-emerald-100 hover:bg-emerald-200" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted"}`}
+                >
+                  {form.depositWaived ? "Require deposit" : "Waive deposit"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -905,6 +1256,140 @@ function NewBookingDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StaffAssignDialog({
+  booking,
+  salonId,
+  onClose,
+  onAssigned,
+}: {
+  booking: BookingRow;
+  salonId: number;
+  onClose: () => void;
+  onAssigned: () => void;
+}) {
+  const [selectedStaffId, setSelectedStaffId] = useState<string>(booking.staffId ? String(booking.staffId) : "");
+  const { data: staff } = useListStaff(salonId, { query: { queryKey: getListStaffQueryKey(salonId) } });
+  const activeStaff = (staff ?? []).filter(s => s.isActive);
+  const assignStaff = useAssignBookingStaff();
+
+  const handleSave = () => {
+    assignStaff.mutate(
+      { id: booking.id, data: { staffId: selectedStaffId ? Number(selectedStaffId) : null } },
+      { onSuccess: onAssigned }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Assign Staff</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-lg border p-3 text-sm bg-muted/40">
+            <p className="font-medium">{booking.clientName}</p>
+            <p className="text-muted-foreground">{booking.serviceName} · {format(new Date(booking.appointmentAt), "MMM d, h:mm a")}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Staff Member</Label>
+            <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Any available" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Any available</SelectItem>
+                {activeStaff.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name} · {s.role}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={assignStaff.isPending}>
+            {assignStaff.isPending ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RescheduleDialog({
+  booking,
+  onClose,
+  onRescheduled,
+}: {
+  booking: BookingRow;
+  onClose: () => void;
+  onRescheduled: () => void;
+}) {
+  const appt = new Date(booking.appointmentAt);
+  const [dateVal, setDateVal] = useState(() => format(appt, "yyyy-MM-dd"));
+  const [timeVal, setTimeVal] = useState(() => format(appt, "HH:mm"));
+  const reschedule = useRescheduleBooking();
+
+  const handleSave = () => {
+    const appointmentAt = new Date(`${dateVal}T${timeVal}:00`).toISOString();
+    reschedule.mutate(
+      { id: booking.id, data: { appointmentAt } },
+      { onSuccess: onRescheduled }
+    );
+  };
+
+  const isUnchanged = dateVal === format(appt, "yyyy-MM-dd") && timeVal === format(appt, "HH:mm");
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Reschedule Booking</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-lg border p-3 text-sm bg-muted/40">
+            <p className="font-medium">{booking.clientName}</p>
+            <p className="text-muted-foreground">{booking.serviceName}{booking.staffName ? ` · ${booking.staffName}` : ""}</p>
+            <p className="text-muted-foreground mt-0.5">Currently: {format(appt, "EEE, MMM d yyyy 'at' h:mm a")}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="reschedule-date">New Date</Label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                value={dateVal}
+                min={format(new Date(), "yyyy-MM-dd")}
+                onChange={(e) => setDateVal(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="reschedule-time">New Time</Label>
+              <Input
+                id="reschedule-time"
+                type="time"
+                value={timeVal}
+                onChange={(e) => setTimeVal(e.target.value)}
+              />
+            </div>
+          </div>
+          {!isUnchanged && (
+            <p className="text-xs text-primary font-medium">
+              Moving to: {format(new Date(`${dateVal}T${timeVal}:00`), "EEE, MMM d 'at' h:mm a")}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={reschedule.isPending || isUnchanged || !dateVal || !timeVal}>
+            {reschedule.isPending ? "Saving…" : "Confirm Reschedule"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

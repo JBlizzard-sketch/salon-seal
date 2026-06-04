@@ -1,6 +1,19 @@
-import { pgTable, serial, text, integer, boolean, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+
+export type BusinessDayHours = { isOpen: boolean; openTime: string; closeTime: string };
+export type BusinessHours = Record<"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday", BusinessDayHours>;
+
+export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
+  monday:    { isOpen: true,  openTime: "09:00", closeTime: "18:00" },
+  tuesday:   { isOpen: true,  openTime: "09:00", closeTime: "18:00" },
+  wednesday: { isOpen: true,  openTime: "09:00", closeTime: "18:00" },
+  thursday:  { isOpen: true,  openTime: "09:00", closeTime: "18:00" },
+  friday:    { isOpen: true,  openTime: "09:00", closeTime: "18:00" },
+  saturday:  { isOpen: true,  openTime: "09:00", closeTime: "17:00" },
+  sunday:    { isOpen: false, openTime: "09:00", closeTime: "17:00" },
+};
 
 export const salonsTable = pgTable("salons", {
   id: serial("id").primaryKey(),
@@ -11,6 +24,9 @@ export const salonsTable = pgTable("salons", {
   location: text("location").notNull(),
   cancellationWindowHours: integer("cancellation_window_hours").notNull().default(24),
   platformFeePercent: numeric("platform_fee_percent", { precision: 5, scale: 2 }).notNull().default("2.50"),
+  monthlyRevenueGoal: integer("monthly_revenue_goal"),
+  autoBlacklistThreshold: integer("auto_blacklist_threshold"),
+  businessHours: jsonb("business_hours").$type<BusinessHours>(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

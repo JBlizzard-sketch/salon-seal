@@ -13,6 +13,7 @@ import Analytics from "@/pages/analytics";
 import Services from "@/pages/services";
 import Staff from "@/pages/staff";
 import Settings from "@/pages/settings";
+import Reminders from "@/pages/reminders";
 import PublicBooking from "@/pages/public-booking";
 import NewSalon from "@/pages/new-salon";
 
@@ -51,6 +52,7 @@ function ProtectedRoutes() {
         <Route path="/services" component={Services} />
         <Route path="/staff" component={Staff} />
         <Route path="/analytics" component={Analytics} />
+        <Route path="/reminders" component={Reminders} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>
