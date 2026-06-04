@@ -3,7 +3,8 @@
 # Run once after cloning, or automatically via the root `prepare` npm script.
 set -e
 
-HOOKS_DIR="$(git rev-parse --show-toplevel)/.git/hooks"
+ROOT="$(git rev-parse --show-toplevel)"
+HOOKS_DIR="$ROOT/.git/hooks"
 
 cat > "$HOOKS_DIR/post-commit" << 'HOOK'
 #!/bin/bash
@@ -13,8 +14,7 @@ if [ -z "${GITHUB_PERSONAL_ACCESS_TOKEN}" ]; then
 fi
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-pnpm --filter @workspace/scripts run push-github --silent 2>&1 | \
-  sed 's/^/[post-commit] /' || \
+bash scripts/src/push-to-github.sh 2>&1 | sed 's/^/[post-commit] /' || \
   echo "[post-commit] ⚠️  GitHub push failed (non-fatal)" >&2
 exit 0
 HOOK
