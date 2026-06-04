@@ -25,9 +25,19 @@ export interface BusinessHours {
   sunday: BusinessDayHours;
 }
 
+/**
+ * Which delivery channels to use for reminder messages
+ */
+export interface NotificationChannels {
+  sms: boolean;
+  whatsapp: boolean;
+  email: boolean;
+}
+
 export interface NotificationPrefs {
   remind24h: boolean;
   remind2h: boolean;
+  channels: NotificationChannels;
   /** @nullable */
   whatsappNumber?: string | null;
 }

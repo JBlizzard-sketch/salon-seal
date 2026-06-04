@@ -1083,6 +1083,21 @@ components:
         - saturday
         - sunday
 
+    NotificationChannels:
+      type: object
+      description: Which delivery channels to use for reminder messages
+      properties:
+        sms:
+          type: boolean
+        whatsapp:
+          type: boolean
+        email:
+          type: boolean
+      required:
+        - sms
+        - whatsapp
+        - email
+
     NotificationPrefs:
       type: object
       properties:
@@ -1090,11 +1105,14 @@ components:
           type: boolean
         remind2h:
           type: boolean
+        channels:
+          $ref: "#/components/schemas/NotificationChannels"
         whatsappNumber:
           type: ["string", "null"]
       required:
         - remind24h
         - remind2h
+        - channels
 
     Salon:
       type: object

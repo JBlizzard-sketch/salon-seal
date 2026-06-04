@@ -60,7 +60,7 @@ export default function Settings() {
   const [businessHours, setBusinessHours] = useState<BusinessHours>(DEFAULT_HOURS);
   const [hoursDirty, setHoursDirty] = useState(false);
 
-  const [notifPrefs, setNotifPrefs] = useState({ remind24h: true, remind2h: true, whatsappNumber: "" });
+  const [notifPrefs, setNotifPrefs] = useState({ remind24h: true, remind2h: true, channels: { sms: false, whatsapp: true, email: false }, whatsappNumber: "" });
   const [notifDirty, setNotifDirty] = useState(false);
 
   useEffect(() => {
@@ -79,6 +79,11 @@ export default function Settings() {
       setNotifPrefs({
         remind24h: salon.notificationPrefs?.remind24h ?? true,
         remind2h: salon.notificationPrefs?.remind2h ?? true,
+        channels: {
+          sms: salon.notificationPrefs?.channels?.sms ?? false,
+          whatsapp: salon.notificationPrefs?.channels?.whatsapp ?? true,
+          email: salon.notificationPrefs?.channels?.email ?? false,
+        },
         whatsappNumber: salon.notificationPrefs?.whatsappNumber ?? "",
       });
     }
@@ -129,6 +134,7 @@ export default function Settings() {
           notificationPrefs: {
             remind24h: notifPrefs.remind24h,
             remind2h: notifPrefs.remind2h,
+            channels: notifPrefs.channels,
             whatsappNumber: notifPrefs.whatsappNumber || null,
           }
         }
@@ -321,6 +327,28 @@ export default function Settings() {
               checked={notifPrefs.remind2h}
               onCheckedChange={(v) => { setNotifPrefs(p => ({ ...p, remind2h: v })); setNotifDirty(true); }}
             />
+          </div>
+          <div className="h-px bg-border" />
+          <div className="h-px bg-border" />
+          <div className="py-1">
+            <p className="font-medium text-sm mb-2">Delivery channels</p>
+            <p className="text-xs text-muted-foreground mb-3">Choose which channels to use when sending reminders.</p>
+            <div className="flex items-center gap-6">
+              {(["whatsapp", "sms", "email"] as const).map(ch => (
+                <label key={ch} className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-primary"
+                    checked={notifPrefs.channels[ch]}
+                    onChange={(e) => {
+                      setNotifPrefs(p => ({ ...p, channels: { ...p.channels, [ch]: e.target.checked } }));
+                      setNotifDirty(true);
+                    }}
+                  />
+                  <span className="text-sm capitalize">{ch}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="h-px bg-border" />
           <div className="space-y-2 pt-1">

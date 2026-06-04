@@ -14,9 +14,28 @@ import {
 
 const router: IRouter = Router();
 
+const DEFAULT_NOTIF_PREFS = { remind24h: true, remind2h: true, channels: { sms: false, whatsapp: true, email: false }, whatsappNumber: null };
+const DEFAULT_CHANNELS = { sms: false, whatsapp: true, email: false };
+
+function normalizeSalon(s: Record<string, unknown>) {
+  const raw = (s.notificationPrefs as Record<string, unknown> | null) ?? {};
+  const notificationPrefs = {
+    ...DEFAULT_NOTIF_PREFS,
+    ...raw,
+    channels: { ...DEFAULT_CHANNELS, ...((raw.channels as Record<string, boolean> | null) ?? {}) },
+  };
+  return {
+    ...s,
+    platformFeePercent: Number(s.platformFeePercent),
+    businessHours: (s.businessHours as object | null) ?? DEFAULT_BUSINESS_HOURS,
+    notificationPrefs,
+    autoBlacklistThreshold: (s.autoBlacklistThreshold as number | null) ?? null,
+  };
+}
+
 router.get("/salons", async (_req, res): Promise<void> => {
   const salons = await db.select().from(salonsTable).orderBy(salonsTable.createdAt);
-  res.json(ListSalonsResponse.parse(salons.map((s) => ({ ...s, platformFeePercent: Number(s.platformFeePercent), businessHours: s.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: s.autoBlacklistThreshold ?? null }))));
+  res.json(ListSalonsResponse.parse(salons.map(normalizeSalon)));
 });
 
 router.post("/salons", async (req, res): Promise<void> => {
@@ -26,7 +45,7 @@ router.post("/salons", async (req, res): Promise<void> => {
     return;
   }
   const [salon] = await db.insert(salonsTable).values(parsed.data).returning();
-  res.status(201).json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
+  res.status(201).json(GetSalonResponse.parse(normalizeSalon(salon as unknown as Record<string, unknown>)));
 });
 
 router.get("/salons/by-slug/:slug", async (req, res): Promise<void> => {
@@ -62,8 +81,7 @@ router.get("/salons/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Salon not found" });
     return;
   }
-  const DEFAULT_NOTIF_PREFS = { remind24h: true, remind2h: true, whatsappNumber: null };
-  res.json(GetSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, notificationPrefs: salon.notificationPrefs ?? DEFAULT_NOTIF_PREFS, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
+  res.json(GetSalonResponse.parse(normalizeSalon(salon as unknown as Record<string, unknown>)));
 });
 
 router.patch("/salons/:id", async (req, res): Promise<void> => {
@@ -86,8 +104,7 @@ router.patch("/salons/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Salon not found" });
     return;
   }
-  const DEFAULT_NOTIF_PREFS2 = { remind24h: true, remind2h: true, whatsappNumber: null };
-  res.json(UpdateSalonResponse.parse({ ...salon, platformFeePercent: Number(salon.platformFeePercent), businessHours: salon.businessHours ?? DEFAULT_BUSINESS_HOURS, notificationPrefs: salon.notificationPrefs ?? DEFAULT_NOTIF_PREFS2, autoBlacklistThreshold: salon.autoBlacklistThreshold ?? null }));
+  res.json(UpdateSalonResponse.parse(normalizeSalon(salon as unknown as Record<string, unknown>)));
 });
 
 export default router;

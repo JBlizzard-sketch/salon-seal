@@ -68,6 +68,13 @@ export const ListSalonsResponseItem = zod.object({
   notificationPrefs: zod.object({
     remind24h: zod.boolean(),
     remind2h: zod.boolean(),
+    channels: zod
+      .object({
+        sms: zod.boolean(),
+        whatsapp: zod.boolean(),
+        email: zod.boolean(),
+      })
+      .describe("Which delivery channels to use for reminder messages"),
     whatsappNumber: zod.string().nullish(),
   }),
   isActive: zod.boolean(),
@@ -145,6 +152,13 @@ export const GetSalonResponse = zod.object({
   notificationPrefs: zod.object({
     remind24h: zod.boolean(),
     remind2h: zod.boolean(),
+    channels: zod
+      .object({
+        sms: zod.boolean(),
+        whatsapp: zod.boolean(),
+        email: zod.boolean(),
+      })
+      .describe("Which delivery channels to use for reminder messages"),
     whatsappNumber: zod.string().nullish(),
   }),
   isActive: zod.boolean(),
@@ -209,6 +223,13 @@ export const UpdateSalonBody = zod.object({
     .object({
       remind24h: zod.boolean(),
       remind2h: zod.boolean(),
+      channels: zod
+        .object({
+          sms: zod.boolean(),
+          whatsapp: zod.boolean(),
+          email: zod.boolean(),
+        })
+        .describe("Which delivery channels to use for reminder messages"),
       whatsappNumber: zod.string().nullish(),
     })
     .optional(),
@@ -266,6 +287,13 @@ export const UpdateSalonResponse = zod.object({
   notificationPrefs: zod.object({
     remind24h: zod.boolean(),
     remind2h: zod.boolean(),
+    channels: zod
+      .object({
+        sms: zod.boolean(),
+        whatsapp: zod.boolean(),
+        email: zod.boolean(),
+      })
+      .describe("Which delivery channels to use for reminder messages"),
     whatsappNumber: zod.string().nullish(),
   }),
   isActive: zod.boolean(),

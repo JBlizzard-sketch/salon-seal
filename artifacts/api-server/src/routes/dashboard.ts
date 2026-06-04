@@ -238,25 +238,79 @@ router.get("/salons/:salonId/analytics/export", async (req, res): Promise<void> 
   const salonId = parseInt(req.params.salonId, 10);
   if (isNaN(salonId)) { res.status(400).json({ error: "Invalid salonId" }); return; }
 
-  const period = (req.query.period as string) || "all";
-  const now = new Date();
+  const format = (req.query.format as string) === "json" ? "json" : "csv";
+
+  // Support explicit from/to date params (ISO strings) or fall back to period shorthand
   let cutoff: Date | null = null;
-  if (period === "week") { cutoff = new Date(now); cutoff.setDate(now.getDate() - 7); }
-  else if (period === "month") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 1); }
-  else if (period === "3months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 3); }
-  else if (period === "6months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 6); }
+  let until: Date | null = null;
+
+  if (req.query.from) {
+    cutoff = new Date(req.query.from as string);
+    if (isNaN(cutoff.getTime())) { res.status(400).json({ error: "Invalid from date" }); return; }
+  } else {
+    const period = (req.query.period as string) || "all";
+    const now = new Date();
+    if (period === "week") { cutoff = new Date(now); cutoff.setDate(now.getDate() - 7); }
+    else if (period === "month") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 1); }
+    else if (period === "3months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 3); }
+    else if (period === "6months") { cutoff = new Date(now); cutoff.setMonth(now.getMonth() - 6); }
+  }
+
+  if (req.query.to) {
+    until = new Date(req.query.to as string);
+    if (isNaN(until.getTime())) { res.status(400).json({ error: "Invalid to date" }); return; }
+  }
+
+  const conditions = [eq(bookingsTable.salonId, salonId)];
+  if (cutoff) conditions.push(gte(bookingsTable.appointmentAt, cutoff));
+  if (until) conditions.push(lte(bookingsTable.appointmentAt, until));
 
   const bookings = await db
     .select()
     .from(bookingsTable)
-    .where(
-      cutoff
-        ? and(eq(bookingsTable.salonId, salonId), gte(bookingsTable.appointmentAt, cutoff))
-        : eq(bookingsTable.salonId, salonId),
-    );
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+    .orderBy(bookingsTable.appointmentAt);
 
+  if (format === "json") {
+    // Aggregated revenue summary by period, service, and staff
+    const byService: Record<string, { serviceName: string; bookings: number; revenue: number; deposits: number }> = {};
+    const byStaff: Record<string, { staffName: string; bookings: number; revenue: number; noShows: number }> = {};
+    let totalRevenue = 0;
+    let totalDeposits = 0;
+    let completedCount = 0;
+    let noShowCount = 0;
+
+    for (const b of bookings) {
+      if (b.status === "completed") {
+        totalRevenue += b.depositAmount;
+        totalDeposits += b.depositAmount;
+        completedCount++;
+      }
+      if (b.status === "no_show") noShowCount++;
+
+      if (!byService[b.serviceName]) byService[b.serviceName] = { serviceName: b.serviceName, bookings: 0, revenue: 0, deposits: 0 };
+      byService[b.serviceName].bookings++;
+      if (b.status === "completed") { byService[b.serviceName].revenue += b.depositAmount; byService[b.serviceName].deposits += b.depositAmount; }
+
+      const staffKey = b.staffName ?? "Unassigned";
+      if (!byStaff[staffKey]) byStaff[staffKey] = { staffName: staffKey, bookings: 0, revenue: 0, noShows: 0 };
+      byStaff[staffKey].bookings++;
+      if (b.status === "completed") byStaff[staffKey].revenue += b.depositAmount;
+      if (b.status === "no_show") byStaff[staffKey].noShows++;
+    }
+
+    res.json({
+      period: { from: cutoff?.toISOString() ?? null, to: until?.toISOString() ?? null },
+      summary: { totalRevenue, totalDeposits, totalBookings: bookings.length, completedBookings: completedCount, noShowBookings: noShowCount },
+      byService: Object.values(byService).sort((a, b) => b.revenue - a.revenue),
+      byStaff: Object.values(byStaff).sort((a, b) => b.revenue - a.revenue),
+    });
+    return;
+  }
+
+  // CSV format — one row per booking
   const rows = [
-    ["Date", "Client", "Phone", "Service", "Staff", "Status", "Price (Ksh)", "Deposit (Ksh)", "Deposit Paid", "M-Pesa Ref"],
+    ["Date", "Client", "Phone", "Service", "Staff", "Status", "Deposit (Ksh)", "Deposit Paid", "M-Pesa Ref"],
     ...bookings.map(b => [
       new Date(b.appointmentAt).toISOString().split("T")[0],
       b.clientName,
@@ -264,7 +318,6 @@ router.get("/salons/:salonId/analytics/export", async (req, res): Promise<void> 
       b.serviceName,
       b.staffName ?? "",
       b.status,
-      "",
       String(b.depositAmount),
       b.depositPaid ? "Yes" : "No",
       b.mpesaRef ?? "",
@@ -272,9 +325,10 @@ router.get("/salons/:salonId/analytics/export", async (req, res): Promise<void> 
   ];
 
   const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const label = cutoff ? cutoff.toISOString().split("T")[0] : "all";
 
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", `attachment; filename="salon-analytics-${period}.csv"`);
+  res.setHeader("Content-Disposition", `attachment; filename="salon-bookings-${label}.csv"`);
   res.send(csv);
 });
 
